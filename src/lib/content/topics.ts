@@ -6,6 +6,8 @@
 
 export type RolePlay = { ask: string; problem: string; experience: string };
 
+import { EXTRA_TOPICS } from "@/lib/content/topics-extra";
+
 export type Topic = {
   id: string;
   label: string;
@@ -23,7 +25,7 @@ const RP_INTRO = "I'd like to give you a situation and ask you to act it out.";
 const RP_PROBLEM = "I'm sorry, but there is a problem that I need you to resolve.";
 const RP_END = "That's the end of the situation.";
 
-export const TOPICS: Topic[] = [
+const BASE_TOPICS: Topic[] = [
   // ───────────── Survey topics ─────────────
   {
     id: "home",
@@ -1017,6 +1019,8 @@ export const TOPICS: Topic[] = [
     },
   },
 ];
+
+export const TOPICS: Topic[] = [...BASE_TOPICS, ...EXTRA_TOPICS];
 
 export function topicById(id: string): Topic | undefined {
   return TOPICS.find((t) => t.id === id);

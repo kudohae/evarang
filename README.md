@@ -43,7 +43,7 @@ src/
     api/access            접근 코드 확인 → httpOnly 쿠키
   components/exam/        시험 화면 (설문, 자가평가, 장비 점검, 문항, 재조정)
   components/report/      평가 보고서
-  lib/content/            설문 항목, 자가평가 단계, 문항 은행 (설문 주제 25개, 돌발 주제 15개)
+  lib/content/            설문 항목, 자가평가 단계, 문항 은행 (설문 주제 63개, 돌발 주제 15개)
   lib/exam/compose.ts     출제 규칙
   lib/evaluation/         평가 기준 프롬프트와 응답 스키마
   lib/server/llm.ts       모델 공급자별 호출 (Anthropic, Gemini, Groq, xAI)

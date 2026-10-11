@@ -100,7 +100,10 @@ export function composeSession2(survey: SurveyAnswers, finalLevel: Level, usedTo
   const r = pickTopic(randomPool, used);
   const out = combo(8, r, b === "high" ? ["describe", "past", "compare"] : ["describe", "routine", "past"]);
 
-  const rp = pickTopic(TOPICS, used, (t) => Boolean(t.roleplay));
+  const selected = topicsFromSelection([...survey.leisure, ...survey.hobbies, ...survey.sports, ...survey.trips]);
+  // Role-play comes from what the candidate chose or from the random pool, never from an unchosen survey topic.
+  const rpPool = TOPICS.filter((t) => t.kind === "random" || t.id === "home" || selected.includes(t.id));
+  const rp = pickTopic(rpPool, used, (t) => Boolean(t.roleplay));
   const play = rp.roleplay!;
 
   if (questionCount(finalLevel) === 12) {
@@ -110,7 +113,6 @@ export function composeSession2(survey: SurveyAnswers, finalLevel: Level, usedTo
 
   out.push(ask(11, rp, "rp_ask", play.ask), ask(12, rp, "rp_problem", play.problem), ask(13, rp, "rp_experience", play.experience));
 
-  const selected = topicsFromSelection([...survey.leisure, ...survey.hobbies, ...survey.sports, ...survey.trips]);
   const lastPool = TOPICS.filter((t) => selected.includes(t.id) || t.kind === "random");
   const e = pickTopic(lastPool, used);
   out.push(ask(14, e, "compare", pick(e.compare)));

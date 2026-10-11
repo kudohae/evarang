@@ -54,21 +54,36 @@ export type Speech = { done: Promise<void>; cancel: () => void };
  * Speaks text sentence by sentence. Chrome silently stops long utterances,
  * so one utterance per sentence keeps long role-play prompts intact.
  */
+let speechToken = 0;
+
 export function speak(text: string, voice?: SpeechSynthesisVoice, rate = 0.95): Speech {
   if (typeof speechSynthesis === "undefined") return { done: Promise.resolve(), cancel: () => {} };
+  // A new speech always replaces the old one; the old chain sees the token change and stops.
+  const token = ++speechToken;
   speechSynthesis.cancel();
   const parts = text.match(/[^.!?]+[.!?]*\s*/g) ?? [text];
   let cancelled = false;
   const done = new Promise<void>((resolve) => {
     let i = 0;
+    let watchdog = 0;
     const next = () => {
-      if (cancelled || i >= parts.length) return resolve();
-      const u = new SpeechSynthesisUtterance(parts[i++].trim());
+      clearTimeout(watchdog);
+      if (cancelled || token !== speechToken || i >= parts.length) return resolve();
+      const sentence = parts[i++].trim();
+      const u = new SpeechSynthesisUtterance(sentence);
       if (voice) u.voice = voice;
       u.lang = voice?.lang ?? "en-US";
       u.rate = rate;
-      u.onend = next;
-      u.onerror = next;
+      let finished = false;
+      const once = () => {
+        if (finished) return;
+        finished = true;
+        next();
+      };
+      u.onend = once;
+      u.onerror = once;
+      // Some engines never fire `end` (no voices installed, tab in background). Move on after a generous estimate.
+      watchdog = window.setTimeout(once, 2500 + (sentence.length * 150) / rate);
       speechSynthesis.speak(u);
     };
     next();
@@ -77,7 +92,7 @@ export function speak(text: string, voice?: SpeechSynthesisVoice, rate = 0.95): 
     done,
     cancel: () => {
       cancelled = true;
-      speechSynthesis.cancel();
+      if (token === speechToken) speechSynthesis.cancel();
     },
   };
 }

@@ -1,0 +1,118 @@
+"use client";
+
+import Link from "next/link";
+import { useEffect, useState } from "react";
+import { useConfig } from "@/components/AccessGate";
+import { Icon, Wordmark } from "@/components/ui";
+import { allResults } from "@/lib/client/db";
+import { latestEvaluation, type ExamResult } from "@/lib/exam/result";
+import { modelById } from "@/lib/models";
+
+const DIFFERENCES = [
+  {
+    title: "시험장과 같은 조건에서 말하게 됩니다.",
+    body: "질문은 글자 없이 음성으로만 나오고, 다시 듣기는 질문이 끝난 뒤 5초 안에 한 번뿐입니다. 서베이와 난이도에 맞춰 12~15문항이 나오고, 7번 문항 뒤에 난이도를 다시 고릅니다. 채팅창에서 질문을 읽고 천천히 답하는 연습으로는 이 압박을 겪어볼 수 없습니다.",
+  },
+  {
+    title: "실제로 말한 그대로 평가받습니다.",
+    body: "um, uh 같은 군말과 2초 넘게 멈춘 곳까지 받아써서 답변 위에 표시합니다. 보통의 음성 입력 기능은 군말을 지우고 문장을 다듬기 때문에, 실제보다 매끄럽게 말한 것처럼 보입니다.",
+  },
+  {
+    title: "시험 전체를 하나의 기준으로 판정합니다.",
+    body: "ACTFL의 네 가지 기준으로 모든 답변을 함께 보고 등급을 매깁니다. 가장 잘한 답변이 아니라 끝까지 유지한 수준을 봅니다. 답변을 하나씩 따로 물어보면 그때마다 기준이 흔들리기 쉽습니다.",
+  },
+  {
+    title: "다음 등급까지 무엇을 바꿔야 하는지 내 문장으로 보여줍니다.",
+    body: "틀린 곳은 내 답변 위에 바로 고쳐 쓰고, 내가 한 말을 한 단계 위 수준으로 다시 써서 들려줍니다. 응시할 때마다 기록이 남아 지난 시험과 비교할 수 있습니다.",
+  },
+];
+
+export function Home() {
+  const config = useConfig();
+  const [results, setResults] = useState<ExamResult[] | null>(null);
+
+  useEffect(() => {
+    void allResults<ExamResult>()
+      .then((list) => setResults(list.sort((a, b) => b.createdAt - a.createdAt)))
+      .catch(() => setResults([]));
+  }, []);
+
+  return (
+    <div className="min-h-dvh">
+      <header className="mx-auto flex h-14 max-w-[1040px] items-center px-5">
+        <Wordmark />
+      </header>
+
+      <main className="mx-auto max-w-[720px] px-5 pb-24">
+        <section className="rise pt-16 md:pt-24">
+          <h1 className="text-[34px] font-bold leading-[1.22] tracking-[-0.03em] md:text-[44px]">
+            실제 OPIc 순서 그대로 보고,
+            <br />
+            말한 그대로 첨삭받는 모의고사
+          </h1>
+          <p className="mt-5 max-w-[560px] text-[17px] leading-[1.7] text-ink-2">
+            Background Survey부터 난이도 재조정까지 시험 진행을 그대로 따릅니다. 끝나면 예상 등급과 문항별 첨삭을 받습니다.
+          </p>
+          <div className="mt-10 flex flex-wrap items-center gap-x-5 gap-y-3">
+            <Link
+              href="/test"
+              className="inline-flex h-13 items-center gap-2 rounded-ctl bg-ink px-7 text-[16px] font-semibold text-paper transition-[background-color,transform] duration-150 hover:bg-ink/88 active:scale-[0.985]"
+            >
+              모의고사 시작
+              <Icon name="arrow" className="size-4" />
+            </Link>
+            <span className="text-[14px] text-ink-3">약 60분 · 마이크 필요</span>
+          </div>
+          {!config.stt && <p className="mt-6 text-[14px] text-pen-ink">서버에 음성인식 키가 설정되지 않아 지금은 답변을 받아쓸 수 없습니다.</p>}
+        </section>
+
+        {results && results.length > 0 && (
+          <section className="mt-24">
+            <h2 className="text-[15px] font-semibold text-ink-2">지난 시험</h2>
+            <ul className="mt-4">
+              {results.slice(0, 12).map((r) => {
+                const ev = latestEvaluation(r);
+                return (
+                  <li key={r.id} className="border-t border-line first:border-t-0">
+                    <Link href={`/results/${r.id}`} className="group flex items-center gap-5 py-4">
+                      <span className="tabular w-14 shrink-0 text-[22px] font-bold tracking-[-0.02em]">{ev?.overall?.grade ?? "—"}</span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block text-[15px] font-medium">
+                          {new Date(r.createdAt).toLocaleDateString("ko-KR", { year: "numeric", month: "long", day: "numeric" })}
+                        </span>
+                        <span className="block text-[13px] text-ink-3">
+                          난이도 {r.startLevel}→{r.finalLevel} · {r.questions.length}문항 · {ev ? modelById(ev.modelId)?.label ?? ev.modelId : "평가 전"}
+                        </span>
+                      </span>
+                      <Icon name="arrow" className="size-4 text-ink-3 transition-transform group-hover:translate-x-0.5 group-hover:text-ink" />
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+          </section>
+        )}
+
+        <section className="mt-24">
+          <h2 className="text-[22px] font-bold tracking-[-0.02em]">AI와 혼자 연습할 때와 다른 점</h2>
+          <ol className="mt-8 flex flex-col">
+            {DIFFERENCES.map((d, i) => (
+              <li key={d.title} className="flex gap-5 border-t border-line py-7 first:border-t-0 first:pt-0">
+                <span className="tabular w-5 shrink-0 pt-px text-[16px] font-semibold text-ink-3">{i + 1}</span>
+                <div>
+                  <p className="text-[17px] font-semibold leading-snug">{d.title}</p>
+                  <p className="mt-2 text-[15px] leading-[1.75] text-ink-2">{d.body}</p>
+                </div>
+              </li>
+            ))}
+          </ol>
+        </section>
+
+        <footer className="mt-20 border-t border-line pt-6 text-[13px] leading-relaxed text-ink-3">
+          <p>예상 등급은 공식 OPIc 결과가 아닙니다. 발음은 평가하지 않습니다.</p>
+          <p>녹음과 결과는 이 브라우저에만 저장됩니다. 받아쓰기와 평가를 위해 녹음과 받아쓴 글이 음성인식·평가 서비스로 전송됩니다.</p>
+        </footer>
+      </main>
+    </div>
+  );
+}

@@ -1,0 +1,168 @@
+"use client";
+
+import Link from "next/link";
+import { useEffect, useState } from "react";
+import { useConfig } from "@/components/AccessGate";
+import { ModelPicker, preferredModel, rememberModel } from "@/components/report/ModelPicker";
+import { Report } from "@/components/report/Report";
+import { Button, Icon, Spinner, Wordmark } from "@/components/ui";
+import { evaluate, type Progress } from "@/lib/client/evaluate";
+import { getResult, putResult } from "@/lib/client/db";
+import type { ExamResult } from "@/lib/exam/result";
+import { modelById } from "@/lib/models";
+
+function Shell({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="min-h-dvh">
+      <header className="no-print border-b border-line">
+        <div className="mx-auto flex h-14 max-w-[1040px] items-center justify-between px-5">
+          <Wordmark />
+          <Link href="/" className="text-[14px] text-ink-2 hover:text-ink">
+            처음으로
+          </Link>
+        </div>
+      </header>
+      {children}
+    </div>
+  );
+}
+
+export function ReportApp({ id }: { id: string }) {
+  const config = useConfig();
+  const [result, setResult] = useState<ExamResult | null | undefined>(undefined);
+  const [picking, setPicking] = useState(false);
+  const [model, setModel] = useState("");
+  const [progress, setProgress] = useState<Progress | null>(null);
+  const [error, setError] = useState("");
+  const [shown, setShown] = useState<string | null>(null);
+
+  useEffect(() => {
+    void getResult<ExamResult>(id).then((r) => setResult(r ?? null));
+  }, [id]);
+
+  useEffect(() => {
+    if (!model) setModel(preferredModel(config.models.filter((m) => m.available).map((m) => m.id)) ?? "");
+  }, [config, model]);
+
+  const run = async () => {
+    if (!result || !model) return;
+    rememberModel(model);
+    setError("");
+    setProgress({ batchesDone: 0, batches: 1, overall: "pending" });
+    try {
+      const ev = await evaluate(result, model, setProgress);
+      if (!ev.overall && ev.questions.length === 0) throw new Error(ev.errors[0] ?? "평가에 실패했습니다.");
+      const next = { ...result, evaluations: [...result.evaluations, ev] };
+      await putResult(next.id, next);
+      setResult(next);
+      setShown(ev.id);
+      setPicking(false);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setProgress(null);
+    }
+  };
+
+  if (result === undefined) {
+    return (
+      <Shell>
+        <div className="flex justify-center pt-32 text-ink-3">
+          <Spinner className="size-5" />
+        </div>
+      </Shell>
+    );
+  }
+
+  if (result === null) {
+    return (
+      <Shell>
+        <main className="mx-auto max-w-[560px] px-5 pt-24">
+          <h1 className="text-[22px] font-bold">결과를 찾을 수 없습니다</h1>
+          <p className="mt-2 text-[15px] text-ink-2">시험 기록은 응시한 브라우저에만 저장됩니다. 다른 기기나 브라우저에서는 열리지 않습니다.</p>
+        </main>
+      </Shell>
+    );
+  }
+
+  if (progress) {
+    const total = progress.batches + 1;
+    const done = progress.batchesDone + (progress.overall === "pending" ? 0 : 1);
+    return (
+      <Shell>
+        <main className="rise mx-auto max-w-[560px] px-5 pt-24">
+          <h1 className="text-[24px] font-bold tracking-[-0.02em]">평가하고 있습니다</h1>
+          <p className="mt-2 text-[15px] leading-relaxed text-ink-2">
+            {modelById(model)?.label}가 답변 {result.questions.length}개를 읽고 있습니다. 1~3분 정도 걸립니다. 이 화면을 닫으면 평가가 중단됩니다.
+          </p>
+          <div className="mt-10 h-1 w-full overflow-hidden rounded-full bg-line">
+            <div className="h-full rounded-full bg-ink transition-[width] duration-700" style={{ width: `${Math.max(4, (done / total) * 100)}%` }} />
+          </div>
+          <ul className="tabular mt-5 flex flex-col gap-1.5 text-[14px] text-ink-2">
+            <li>
+              문항별 첨삭 {progress.batchesDone} / {progress.batches}
+            </li>
+            <li>종합 판정 {progress.overall === "pending" ? "진행 중" : progress.overall === "done" ? "완료" : "실패"}</li>
+          </ul>
+        </main>
+      </Shell>
+    );
+  }
+
+  const evaluation = result.evaluations.find((e) => e.id === shown) ?? result.evaluations[result.evaluations.length - 1];
+
+  if (!evaluation || picking) {
+    const empty = result.answers.every((a) => !a.transcript?.text.trim());
+    return (
+      <Shell>
+        <main className="rise mx-auto max-w-[640px] px-5 pb-24 pt-14">
+          <h1 className="text-[26px] font-bold tracking-[-0.02em]">평가 모델 선택</h1>
+          <p className="mt-3 text-[15px] leading-relaxed text-ink-2">
+            답변 {result.answers.length}개를 받아썼습니다. 어떤 모델로 평가할지 고르세요. 같은 시험을 나중에 다른 모델로 다시 평가해 비교할 수 있습니다.
+          </p>
+          {empty && <p className="mt-4 text-[15px] text-pen-ink">받아쓴 답변이 모두 비어 있습니다. 마이크 입력을 확인한 뒤 다시 응시하는 것이 좋습니다.</p>}
+          <div className="mt-8">
+            <ModelPicker value={model} onChange={setModel} />
+          </div>
+          {error && <p className="mt-6 text-[14px] leading-relaxed text-pen-ink">{error}</p>}
+          <div className="mt-10 flex items-center justify-end gap-2">
+            {evaluation && (
+              <Button variant="quiet" onClick={() => setPicking(false)}>
+                취소
+              </Button>
+            )}
+            <Button onClick={run} disabled={!model}>
+              평가 시작
+              <Icon name="arrow" className="size-4" />
+            </Button>
+          </div>
+        </main>
+      </Shell>
+    );
+  }
+
+  const history =
+    result.evaluations.length > 1 ? (
+      <label className="no-print mt-3 inline-flex items-center gap-2 text-[14px] text-ink-2">
+        평가 기록
+        <select
+          value={evaluation.id}
+          onChange={(e) => setShown(e.target.value)}
+          className="h-9 rounded-ctl border border-line-strong bg-surface px-2 text-[14px] text-ink"
+        >
+          {result.evaluations.map((e) => (
+            <option key={e.id} value={e.id}>
+              {modelById(e.modelId)?.label ?? e.modelId} · {new Date(e.createdAt).toLocaleString("ko-KR", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+              {e.overall ? ` · ${e.overall.grade}` : ""}
+            </option>
+          ))}
+        </select>
+      </label>
+    ) : null;
+
+  return (
+    <Shell>
+      <Report result={result} evaluation={evaluation} onReevaluate={() => setPicking(true)} history={history} />
+    </Shell>
+  );
+}

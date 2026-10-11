@@ -1,16 +1,17 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useConfig } from "@/components/AccessGate";
 import { ModelPicker, preferredModel, rememberModel } from "@/components/report/ModelPicker";
 import { Report } from "@/components/report/Report";
+import { WaitingRoom } from "@/components/report/WaitingRoom";
 import { Button, Icon, Spinner, Wordmark } from "@/components/ui";
 import { evaluate, type Progress } from "@/lib/client/evaluate";
 import { getAudio, getResult, putResult } from "@/lib/client/db";
 import { transcribeBlob } from "@/lib/client/transcribe";
 import { FallbackNotice } from "@/components/FallbackNotice";
-import type { FallbackReason } from "@/lib/types";
+import type { FallbackReason, Grade } from "@/lib/types";
 import type { ExamResult } from "@/lib/exam/result";
 import { modelById } from "@/lib/models";
 
@@ -38,14 +39,28 @@ export function ReportApp({ id }: { id: string }) {
   const [result, setResult] = useState<ExamResult | null | undefined>(undefined);
   const [picking, setPicking] = useState(false);
   const [model, setModel] = useState("");
-  const [progress, setProgress] = useState<Progress | null>(null);
+  // Evaluation runs in the background while the waiting room asks for the real grade and shows the transcripts.
+  const [waiting, setWaiting] = useState<{ progress: Progress; done: boolean } | null>(null);
   const [error, setError] = useState("");
   const [shown, setShown] = useState<string | null>(null);
   const [retrying, setRetrying] = useState(false);
   const [notice, setNotice] = useState<FallbackReason | null>(null);
 
+  // The latest saved result. Writes that finish later (evaluation, grade answer) build on this, never on a stale copy.
+  const latest = useRef<ExamResult | null>(null);
+  const save = async (update: (r: ExamResult) => ExamResult) => {
+    if (!latest.current) return;
+    const next = update(latest.current);
+    latest.current = next;
+    setResult(next);
+    await putResult(next.id, next);
+  };
+
   useEffect(() => {
-    void getResult<ExamResult>(id).then((r) => setResult(r ?? null));
+    void getResult<ExamResult>(id).then((r) => {
+      latest.current = r ?? null;
+      setResult(r ?? null);
+    });
   }, [id]);
 
   const usedBackup = Boolean(result?.answers.some((a) => a.transcript?.engine === "gemini"));
@@ -63,21 +78,22 @@ export function ReportApp({ id }: { id: string }) {
     // An automatic pick for a backup-transcribed test should not become the default for normal tests.
     if (!usedBackup) rememberModel(model);
     setError("");
-    setProgress({ batchesDone: 0, batches: 1, overall: "pending" });
+    setWaiting({ progress: { batchesDone: 0, batches: 1, overall: "pending" }, done: false });
     try {
-      const ev = await evaluate(result, model, setProgress);
+      const ev = await evaluate(result, model, (progress) => setWaiting((w) => (w ? { ...w, progress } : w)));
       if (!ev.overall && ev.questions.length === 0) throw new Error(ev.errors[0] ?? "평가에 실패했습니다.");
-      const next = { ...result, evaluations: [...result.evaluations, ev] };
-      await putResult(next.id, next);
-      setResult(next);
+      await save((r) => ({ ...r, evaluations: [...r.evaluations, ev] }));
       setShown(ev.id);
       setPicking(false);
+      // Do not pull the reader away from the transcripts; the bar at the top offers the report.
+      setWaiting((w) => (w ? { ...w, done: true } : w));
     } catch (e) {
       setError((e as Error).message);
-    } finally {
-      setProgress(null);
+      setWaiting(null);
     }
   };
+
+  const answerActualGrade = (g: Grade | "none") => void save((r) => ({ ...r, actualGrade: g }));
 
   /** Re-runs transcription for answers that failed, from the recordings kept in this browser. */
   const retranscribe = async () => {
@@ -99,13 +115,12 @@ export function ReportApp({ id }: { id: string }) {
         answers = answers.map((x) => (x.number === a.number ? { ...x, transcriptError: (e as Error).message } : x));
       }
     }
-    const next = { ...result, answers };
-    await putResult(next.id, next);
-    setResult(next);
+    const before = result.answers;
+    await save((r) => ({ ...r, answers }));
     setRetrying(false);
     if (errors.length) setError(`다시 받아쓰지 못한 답변이 있습니다. ${errors[0]}`);
     if (fallback) setNotice(fallback);
-    if (next.evaluations.length && answers.some((x, i) => x.transcript && !result.answers[i].transcript)) setPicking(true);
+    if (result.evaluations.length && answers.some((x, i) => x.transcript && !before[i].transcript)) setPicking(true);
   };
 
   const missing = result ? result.answers.filter((a) => !a.transcript).length : 0;
@@ -132,26 +147,20 @@ export function ReportApp({ id }: { id: string }) {
     );
   }
 
-  if (progress) {
-    const total = progress.batches + 1;
-    const done = progress.batchesDone + (progress.overall === "pending" ? 0 : 1);
+  if (waiting) {
     return (
       <Shell>
-        <main className="rise mx-auto max-w-[560px] px-5 pt-24">
-          <h1 className="text-[24px] font-bold tracking-[-0.02em]">평가하고 있습니다</h1>
-          <p className="mt-2 text-[15px] leading-relaxed text-ink-2">
-            {modelById(model)?.label}가 답변 {result.questions.length}개를 읽고 있습니다. 1~3분 정도 걸립니다. 이 화면을 닫으면 평가가 중단됩니다.
-          </p>
-          <div className="mt-10 h-1 w-full overflow-hidden rounded-full bg-line">
-            <div className="h-full rounded-full bg-ink transition-[width] duration-700" style={{ width: `${Math.max(4, (done / total) * 100)}%` }} />
-          </div>
-          <ul className="tabular mt-5 flex flex-col gap-1.5 text-[14px] text-ink-2">
-            <li>
-              문항별 첨삭 {progress.batchesDone} / {progress.batches}
-            </li>
-            <li>종합 판정 {progress.overall === "pending" ? "진행 중" : progress.overall === "done" ? "완료" : "실패"}</li>
-          </ul>
-        </main>
+        <WaitingRoom
+          result={result}
+          progress={waiting.progress}
+          done={waiting.done}
+          modelLabel={modelById(model)?.label ?? model}
+          onActualGrade={answerActualGrade}
+          onOpenReport={() => {
+            setWaiting(null);
+            window.scrollTo(0, 0);
+          }}
+        />
       </Shell>
     );
   }

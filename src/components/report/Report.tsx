@@ -149,6 +149,11 @@ export function Report({
                 <div className="mt-8">
                   <GradeLadder grade={o.grade} low={o.range_low} high={o.range_high} />
                 </div>
+                {result.actualGrade && result.actualGrade !== "none" && (
+                  <p className="mt-6 text-[15px] text-ink-2">
+                    실제 OPIc 등급은 <span className="font-semibold text-ink">{result.actualGrade}</span>라고 답하셨습니다.
+                  </p>
+                )}
                 <p className="mt-8 text-[17px] leading-[1.8]">{o.verdict}</p>
                 <p className="mt-4 text-[14px] leading-relaxed text-ink-2">
                   {o.grade} — {GRADE_INFO[o.grade].summary}

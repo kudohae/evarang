@@ -1,6 +1,6 @@
 import type { OverallFeedback, QuestionFeedback } from "@/lib/evaluation/schema";
 import type { Usage } from "@/lib/models";
-import type { Adjustment, AnswerRecord, ExamQuestion, Level, SurveyAnswers } from "@/lib/types";
+import type { Adjustment, AnswerRecord, ExamQuestion, Grade, Level, SurveyAnswers } from "@/lib/types";
 
 export type Evaluation = {
   id: string;
@@ -24,6 +24,8 @@ export type ExamResult = {
   questions: ExamQuestion[];
   answers: AnswerRecord[];
   evaluations: Evaluation[];
+  /** The candidate's real OPIc grade, if they have one. Never sent to the evaluator; kept to compare estimates against. */
+  actualGrade?: Grade | "none";
 };
 
 export function latestEvaluation(r: ExamResult): Evaluation | undefined {

@@ -14,6 +14,9 @@ import type { FallbackReason } from "@/lib/types";
 import type { ExamResult } from "@/lib/exam/result";
 import { modelById } from "@/lib/models";
 
+// Backup transcription spends the same Gemini free-tier quota, so evaluation goes to the model with the largest allowance.
+const BACKUP_EVAL_MODEL = "gemini-3.5-flash-lite";
+
 function Shell({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-dvh">
@@ -45,13 +48,20 @@ export function ReportApp({ id }: { id: string }) {
     void getResult<ExamResult>(id).then((r) => setResult(r ?? null));
   }, [id]);
 
+  const usedBackup = Boolean(result?.answers.some((a) => a.transcript?.engine === "gemini"));
+  const loaded = result !== undefined;
+
   useEffect(() => {
-    if (!model) setModel(preferredModel(config.models.filter((m) => m.available).map((m) => m.id)) ?? "");
-  }, [config, model]);
+    if (!loaded) return;
+    const ids = config.models.filter((m) => m.available).map((m) => m.id);
+    if (usedBackup && ids.includes(BACKUP_EVAL_MODEL)) setModel(BACKUP_EVAL_MODEL);
+    else setModel((m) => m || (preferredModel(ids) ?? ""));
+  }, [config, usedBackup, loaded]);
 
   const run = async () => {
     if (!result || !model) return;
-    rememberModel(model);
+    // An automatic pick for a backup-transcribed test should not become the default for normal tests.
+    if (!usedBackup) rememberModel(model);
     setError("");
     setProgress({ batchesDone: 0, batches: 1, overall: "pending" });
     try {
@@ -169,6 +179,11 @@ export function ReportApp({ id }: { id: string }) {
             </div>
           )}
           {empty && <p className="mt-4 text-[15px] text-pen-ink">받아쓴 답변이 모두 비어 있습니다. 마이크 입력을 확인한 뒤 다시 응시하는 것이 좋습니다.</p>}
+          {usedBackup && model === BACKUP_EVAL_MODEL && (
+            <p className="mt-4 text-[14px] leading-relaxed text-ink-2">
+              보조 음성인식으로 받아쓴 시험이라 Gemini 3.5 Flash-Lite를 골라 두었습니다. 받아쓰기와 같은 무료 한도를 쓰기 때문에, 한도가 가장 넉넉한 모델로 평가합니다.
+            </p>
+          )}
           <div className="mt-8">
             <ModelPicker value={model} onChange={setModel} />
           </div>

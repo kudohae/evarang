@@ -6,7 +6,7 @@ import { useConfig } from "@/components/AccessGate";
 import { Icon, Wordmark } from "@/components/ui";
 import { allResults } from "@/lib/client/db";
 import { latestEvaluation, type ExamResult } from "@/lib/exam/result";
-import { modelById } from "@/lib/models";
+import { modelLabel } from "@/lib/models";
 
 const DIFFERENCES = [
   {
@@ -81,7 +81,7 @@ export function Home() {
                           {new Date(r.createdAt).toLocaleDateString("ko-KR", { year: "numeric", month: "long", day: "numeric" })}
                         </span>
                         <span className="block text-[13px] text-ink-3">
-                          난이도 {r.startLevel}→{r.finalLevel} · {r.questions.length}문항 · {ev ? modelById(ev.modelId)?.label ?? ev.modelId : "평가 전"}
+                          난이도 {r.startLevel}→{r.finalLevel} · {r.questions.length}문항 · {ev ? modelLabel(ev.modelId) : "평가 전"}
                         </span>
                       </span>
                       <Icon name="arrow" className="size-4 text-ink-3 transition-transform group-hover:translate-x-0.5 group-hover:text-ink" />

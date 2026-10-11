@@ -7,7 +7,7 @@ import { QuestionDetail } from "@/components/report/QuestionDetail";
 import { GRADE_INFO } from "@/lib/content/levels";
 import type { Evaluation, ExamResult } from "@/lib/exam/result";
 import { answerMetrics, examMetrics, formatClock } from "@/lib/metrics";
-import { estimateCost, modelById, STT_USD_PER_HOUR } from "@/lib/models";
+import { modelLabel } from "@/lib/models";
 
 const CRITERIA = {
   functions: { name: "과제 수행", hint: "묘사·서술·문제 해결 같은 과제를 실제로 해내는가" },
@@ -63,7 +63,6 @@ export function Report({
 }) {
   const [deleting, setDeleting] = useState<"idle" | "busy" | "error">("idle");
   const o = evaluation.overall;
-  const model = modelById(evaluation.modelId);
   const perAnswer = useMemo(() => result.answers.map((a) => ({ number: a.number, m: answerMetrics(a) })), [result.answers]);
   const totals = examMetrics(perAnswer.filter((x) => x.number !== 1).map((x) => x.m));
   const [current, setCurrent] = useState(result.questions[0]?.number ?? 1);
@@ -77,8 +76,6 @@ export function Report({
 
   const estimated = result.answers.filter((a) => a.transcript?.approxTiming).length;
   const sttSeconds = result.answers.reduce((s, a) => s + (a.transcript?.audioSeconds ?? a.durationMs / 1000), 0);
-  const llmCost = model ? estimateCost(model, evaluation.usage) : null;
-  const sttCost = (sttSeconds / 3600) * STT_USD_PER_HOUR;
 
   const toc = [
     ["grade", "예상 등급"],
@@ -133,9 +130,11 @@ export function Report({
                 <li key={e}>{e}</li>
               ))}
             </ul>
+            {!readOnly && (
             <button type="button" onClick={onReevaluate} className="mt-2 font-semibold underline underline-offset-4">
               다시 평가하기
             </button>
+            )}
           </div>
         )}
 
@@ -318,8 +317,7 @@ export function Report({
 
         <footer className="mt-16 border-t border-line pt-6 text-[13px] leading-relaxed text-ink-3">
           <p>
-            {model?.label ?? evaluation.modelId}로 평가 · 토큰 입력 {evaluation.usage.inputTokens.toLocaleString()} / 출력 {evaluation.usage.outputTokens.toLocaleString()}
-            {llmCost !== null ? ` · 약 $${llmCost.toFixed(3)}` : " · 무료 등급 또는 가격 미상"} · 음성인식 {formatClock(sttSeconds)} · 약 ${sttCost.toFixed(3)}
+            {modelLabel(evaluation.modelId)}로 평가 · 받아쓴 녹음 {formatClock(sttSeconds)}
           </p>
           <p className="mt-1">예상 등급은 공식 OPIc 결과가 아닙니다. 발음은 평가하지 않았습니다.</p>
           {result.actualGrade && !readOnly && (
@@ -356,11 +354,6 @@ export function Report({
             </div>
           )}
           <div className="no-print mt-5 flex flex-wrap gap-2">
-            {!readOnly && (
-              <Button variant="secondary" onClick={onReevaluate}>
-                다른 모델로 다시 평가
-              </Button>
-            )}
             <Button variant="quiet" onClick={() => window.print()}>
               인쇄
             </Button>

@@ -59,9 +59,8 @@ export default function PrivacyPage() {
           <tbody className="text-ink">
             {[
               ["AssemblyAI, Inc.", "미국", "녹음 받아쓰기"],
-              ["Google LLC (Gemini API)", "미국 등", "보조 받아쓰기, 평가"],
-              ["Anthropic PBC (Claude API)", "미국", "평가"],
-              ["X.AI Corp. (Grok API), Groq, Inc.", "미국", "평가"],
+              ["Google LLC (Gemini API)", "미국 등", "평가, 보조 받아쓰기"],
+              ["Groq, Inc.", "미국", "평가 (Gemini 무료 한도를 다 쓴 날)"],
               ["Vercel Inc.", "미국 등", "서비스 운영, 녹음 저장 (Blob)"],
               ["Neon (Databricks, Inc.)", "선택한 리전", "예측 개선용 기록 저장 (Postgres)"],
             ].map(([a, b, c]) => (

@@ -17,11 +17,10 @@ export async function POST(request: Request) {
       system: questionSystemPrompt(),
       user: questionUserPrompt(req.context),
       schema: QuestionBatchSchema,
-      effort: "medium",
     });
     return Response.json({ items: data.items, usage });
   } catch (e) {
-    if (e instanceof LlmError) return Response.json({ error: e.message }, { status: e.status });
+    if (e instanceof LlmError) return Response.json({ error: e.message, kind: e.kind, retryAfter: e.retryAfter }, { status: e.status });
     throw e;
   }
 }

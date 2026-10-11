@@ -6,7 +6,7 @@ import { AdminLogin } from "@/components/admin/AdminLogin";
 import { Report } from "@/components/report/Report";
 import { Spinner, Wordmark } from "@/components/ui";
 import type { ExamResult } from "@/lib/exam/result";
-import { modelById } from "@/lib/models";
+import { modelLabel } from "@/lib/models";
 
 export function AdminRecord({ id }: { id: string }) {
   const [result, setResult] = useState<ExamResult | null>(null);
@@ -78,7 +78,7 @@ export function AdminRecord({ id }: { id: string }) {
                 >
                   {result.evaluations.map((e, i) => (
                     <option key={e.id} value={i}>
-                      {modelById(e.modelId)?.label ?? e.modelId} · {e.overall?.grade ?? "—"}
+                      {modelLabel(e.modelId)} · {e.overall?.grade ?? "—"}
                     </option>
                   ))}
                 </select>

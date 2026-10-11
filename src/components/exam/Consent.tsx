@@ -8,9 +8,8 @@ export type ConsentAnswers = { transfer: boolean; age: boolean; research: boolea
 
 const PROCESSORS = [
   ["AssemblyAI", "미국", "녹음 받아쓰기"],
-  ["Google (Gemini)", "미국 등", "보조 받아쓰기, 평가 (해당 모델을 고른 경우)"],
-  ["Anthropic (Claude)", "미국", "평가 (해당 모델을 고른 경우)"],
-  ["xAI (Grok) · Groq", "미국", "평가 (해당 모델을 고른 경우)"],
+  ["Google (Gemini)", "미국 등", "평가, 보조 받아쓰기"],
+  ["Groq", "미국", "평가 (Gemini 무료 한도를 다 쓴 날)"],
 ] as const;
 
 function Box({ title, tag, children }: { title: string; tag: string; children: React.ReactNode }) {

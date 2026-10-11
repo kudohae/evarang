@@ -1,5 +1,5 @@
 import { accessRequired, hasAccess } from "@/lib/server/access";
-import { providerConfigured } from "@/lib/server/llm";
+import { modelAvailable } from "@/lib/server/llm";
 import { MODELS } from "@/lib/models";
 import { storageConfigured } from "@/lib/server/store";
 
@@ -15,6 +15,6 @@ export async function GET() {
       blob: Boolean(process.env.BLOB_STORE_ID || process.env.BLOB_READ_WRITE_TOKEN),
     },
     stt: Boolean(process.env.ASSEMBLYAI_API_KEY || process.env.GEMINI_API_KEY),
-    models: MODELS.map((m) => ({ id: m.id, available: providerConfigured(m.provider) })),
+    models: MODELS.map((m) => ({ id: m.id, available: modelAvailable(m) })),
   });
 }

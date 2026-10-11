@@ -1,7 +1,8 @@
 import { GoogleGenAI } from "@google/genai";
 
-// 3.8 Flash kept every filler in testing; Flash-Lite dropped the occasional "hmm" but has a larger free quota.
-const MODELS = ["gemini-3.8-flash", "gemini-3.5-flash-lite"];
+// One test needs about 16 transcriptions. Flash models allow 20 free requests a day and are kept for grading,
+// so backup transcription runs on Flash-Lite (500 a day). 3.8 Flash kept every filler in testing; Flash-Lite drops the occasional "hmm".
+const MODELS = ["gemini-3.5-flash-lite", "gemini-3.8-flash"];
 
 const PROMPT = `Transcribe this English speech verbatim.
 Keep every filler (um, uh, er, hmm), false start, repetition, self-correction and grammar mistake exactly as spoken. Do not correct, complete or tidy anything.

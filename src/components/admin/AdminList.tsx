@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { AdminLogin } from "@/components/admin/AdminLogin";
 import { Spinner, Wordmark } from "@/components/ui";
-import { modelById } from "@/lib/models";
+import { modelLabel } from "@/lib/models";
 import { GRADES, type Grade } from "@/lib/types";
 
 type Row = {
@@ -59,6 +59,13 @@ export function AdminList() {
   const diffs = paired.map((r) => step(r.estimated_grade) - step(r.actual_grade));
   const pct = (n: number) => (paired.length ? `${Math.round((n / paired.length) * 100)}%` : "—");
   const mean = diffs.length ? diffs.reduce((a, b) => a + b, 0) / diffs.length : 0;
+  // Each free model may grade a little harder or softer, so the same numbers per model.
+  const byModel = [...new Set(paired.map((r) => r.eval_model ?? ""))].map((m) => {
+    const d = paired.filter((r) => (r.eval_model ?? "") === m).map((r) => step(r.estimated_grade) - step(r.actual_grade));
+    const share = (n: number) => `${Math.round((n / d.length) * 100)}%`;
+    const avg = d.reduce((a, b) => a + b, 0) / d.length;
+    return { m, n: d.length, exact: share(d.filter((x) => x === 0).length), near: share(d.filter((x) => Math.abs(x) <= 1).length), avg };
+  });
 
   return (
     <div className="min-h-dvh">
@@ -86,6 +93,30 @@ export function AdminList() {
                 <Stat value={pct(diffs.filter((d) => Math.abs(d) <= 1).length)} label="한 단계 이내" />
                 <Stat value={paired.length ? `${mean > 0 ? "+" : ""}${mean.toFixed(2)}` : "—"} label="평균 차이 (+면 후하게)" />
               </div>
+              {byModel.length > 1 && (
+                <table className="mt-6 w-full max-w-[640px] text-left text-[14px]">
+                  <thead className="text-[13px] text-ink-3">
+                    <tr className="border-b border-line">
+                      <th className="py-2 font-medium">평가 모델</th>
+                      <th className="py-2 font-medium">비교</th>
+                      <th className="py-2 font-medium">일치</th>
+                      <th className="py-2 font-medium">한 단계 이내</th>
+                      <th className="py-2 font-medium">평균 차이</th>
+                    </tr>
+                  </thead>
+                  <tbody className="tabular">
+                    {byModel.map((x) => (
+                      <tr key={x.m} className="border-b border-line">
+                        <td className="py-2">{x.m ? modelLabel(x.m) : "—"}</td>
+                        <td className="py-2">{x.n}</td>
+                        <td className="py-2">{x.exact}</td>
+                        <td className="py-2">{x.near}</td>
+                        <td className="py-2">{`${x.avg > 0 ? "+" : ""}${x.avg.toFixed(2)}`}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
             </section>
 
             <section className="mt-12 overflow-x-auto">
@@ -115,7 +146,7 @@ export function AdminList() {
                         <td className="tabular py-2.5 font-semibold">{r.estimated_grade ?? "—"}</td>
                         <td className="tabular py-2.5">{r.actual_grade === "none" ? "없음" : r.actual_grade ?? "—"}</td>
                         <td className="tabular py-2.5">{d === null ? "—" : d === 0 ? "0" : d > 0 ? `+${d}` : String(d)}</td>
-                        <td className="py-2.5 text-ink-2">{r.eval_model ? modelById(r.eval_model)?.label ?? r.eval_model : "—"}</td>
+                        <td className="py-2.5 text-ink-2">{r.eval_model ? modelLabel(r.eval_model) : "—"}</td>
                         <td className="tabular py-2.5 text-ink-2">
                           {r.start_level}→{r.final_level}
                         </td>

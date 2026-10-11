@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { useConfig } from "@/components/AccessGate";
-import { ModelPicker, preferredModel, rememberModel } from "@/components/report/ModelPicker";
 import { Report } from "@/components/report/Report";
 import { WaitingRoom } from "@/components/report/WaitingRoom";
 import { Button, Icon, Spinner, Wordmark } from "@/components/ui";
@@ -14,10 +13,7 @@ import { deleteResearch, researchSignature, syncResearch, wantsResearch } from "
 import { FallbackNotice } from "@/components/FallbackNotice";
 import type { FallbackReason, Grade } from "@/lib/types";
 import type { ExamResult } from "@/lib/exam/result";
-import { modelById } from "@/lib/models";
-
-// Backup transcription spends the same Gemini free-tier quota, so evaluation goes to the model with the largest allowance.
-const BACKUP_EVAL_MODEL = "gemini-3.5-flash-lite";
+import { MODELS, modelLabel } from "@/lib/models";
 
 function Shell({ children }: { children: React.ReactNode }) {
   return (
@@ -38,8 +34,6 @@ function Shell({ children }: { children: React.ReactNode }) {
 export function ReportApp({ id }: { id: string }) {
   const config = useConfig();
   const [result, setResult] = useState<ExamResult | null | undefined>(undefined);
-  const [picking, setPicking] = useState(false);
-  const [model, setModel] = useState("");
   // Evaluation runs in the background while the waiting room asks for the real grade and shows the transcripts.
   const [waiting, setWaiting] = useState<{ progress: Progress; done: boolean } | null>(null);
   const [error, setError] = useState("");
@@ -64,28 +58,17 @@ export function ReportApp({ id }: { id: string }) {
     });
   }, [id]);
 
-  const usedBackup = Boolean(result?.answers.some((a) => a.transcript?.engine === "gemini"));
-  const loaded = result !== undefined;
-
-  useEffect(() => {
-    if (!loaded) return;
-    const ids = config.models.filter((m) => m.available).map((m) => m.id);
-    if (usedBackup && ids.includes(BACKUP_EVAL_MODEL)) setModel(BACKUP_EVAL_MODEL);
-    else setModel((m) => m || (preferredModel(ids) ?? ""));
-  }, [config, usedBackup, loaded]);
-
   const run = async () => {
-    if (!result || !model) return;
-    // An automatic pick for a backup-transcribed test should not become the default for normal tests.
-    if (!usedBackup) rememberModel(model);
+    const current = latest.current;
+    if (!current) return;
     setError("");
-    setWaiting({ progress: { batchesDone: 0, batches: 1, overall: "pending" }, done: false });
+    const available = config.models.filter((m) => m.available).map((m) => m.id);
+    setWaiting({ progress: { modelId: available[0] ?? MODELS[0].id, batchesDone: 0, batches: 1, overall: "pending" }, done: false });
     try {
-      const ev = await evaluate(result, model, (progress) => setWaiting((w) => (w ? { ...w, progress } : w)));
+      const ev = await evaluate(current, available, (progress) => setWaiting((w) => (w ? { ...w, progress } : w)));
       if (!ev.overall && ev.questions.length === 0) throw new Error(ev.errors[0] ?? "평가에 실패했습니다.");
       await save((r) => ({ ...r, evaluations: [...r.evaluations, ev] }));
       setShown(ev.id);
-      setPicking(false);
       // Do not pull the reader away from the transcripts; the bar at the top offers the report.
       setWaiting((w) => (w ? { ...w, done: true } : w));
     } catch (e) {
@@ -93,6 +76,16 @@ export function ReportApp({ id }: { id: string }) {
       setWaiting(null);
     }
   };
+
+  // A finished test is graded as soon as its report opens. Tests with untranscribed answers wait, so the candidate can retry those first.
+  const started = useRef(false);
+  useEffect(() => {
+    if (!result || started.current) return;
+    started.current = true;
+    const ready = result.evaluations.length === 0 && result.answers.some((a) => a.transcript) && result.answers.every((a) => a.transcript);
+    if (ready) void run();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [result]);
 
   // Research copy: send whenever its content changes (evaluation, real grade, transcripts). Failures wait for the next change.
   const lastSig = useRef("");
@@ -138,7 +131,8 @@ export function ReportApp({ id }: { id: string }) {
     setRetrying(false);
     if (errors.length) setError(`다시 받아쓰지 못한 답변이 있습니다. ${errors[0]}`);
     if (fallback) setNotice(fallback);
-    if (result.evaluations.length && answers.some((x, i) => x.transcript && !before[i].transcript)) setPicking(true);
+    // Newly transcribed answers belong in the grade, so an existing report is graded again with them.
+    if (result.evaluations.length && answers.some((x, i) => x.transcript && !before[i].transcript)) void run();
   };
 
   const missing = result ? result.answers.filter((a) => !a.transcript).length : 0;
@@ -172,7 +166,7 @@ export function ReportApp({ id }: { id: string }) {
           result={result}
           progress={waiting.progress}
           done={waiting.done}
-          modelLabel={modelById(model)?.label ?? model}
+          modelLabel={modelLabel(waiting.progress.modelId)}
           onActualGrade={answerActualGrade}
           onOpenReport={() => {
             setWaiting(null);
@@ -185,19 +179,17 @@ export function ReportApp({ id }: { id: string }) {
 
   const evaluation = result.evaluations.find((e) => e.id === shown) ?? result.evaluations[result.evaluations.length - 1];
 
-  if (!evaluation || picking) {
+  if (!evaluation) {
     const empty = transcribed > 0 && result.answers.every((a) => !a.transcript?.text.trim());
     return (
       <Shell>
         <main className="rise mx-auto max-w-[640px] px-5 pb-24 pt-14">
-          <h1 className="text-[26px] font-bold tracking-[-0.02em]">평가 모델 선택</h1>
-          <p className="mt-3 text-[15px] leading-relaxed text-ink-2">
-            답변 {transcribed}개를 받아썼습니다. 어떤 모델로 평가할지 고르세요. 같은 시험을 나중에 다른 모델로 다시 평가해 비교할 수 있습니다.
-          </p>
+          <h1 className="text-[26px] font-bold tracking-[-0.02em]">평가 전</h1>
+          <p className="mt-3 text-[15px] leading-relaxed text-ink-2">답변 {transcribed}개를 받아썼습니다.</p>
           {missing > 0 && (
             <div className="mt-6 rounded-panel border border-line bg-surface px-5 py-4">
               <p className="text-[15px] leading-relaxed">
-                {transcribed === 0 ? "아직 받아쓴 답변이 없어 평가할 수 없습니다." : `답변 ${missing}개는 받아쓰지 못해 평가에서 빠집니다.`} 녹음은 이 브라우저에 남아 있으니 다시 받아쓸 수 있습니다.
+                {transcribed === 0 ? "아직 받아쓴 답변이 없어 평가할 수 없습니다." : `답변 ${missing}개는 받아쓰지 못해 지금 평가하면 빠집니다.`} 녹음은 이 브라우저에 남아 있으니 다시 받아쓸 수 있습니다.
               </p>
               <Button className="mt-3" variant="secondary" onClick={retranscribe} disabled={retrying}>
                 {retrying ? <Spinner /> : null}
@@ -206,23 +198,10 @@ export function ReportApp({ id }: { id: string }) {
             </div>
           )}
           {empty && <p className="mt-4 text-[15px] text-pen-ink">받아쓴 답변이 모두 비어 있습니다. 마이크 입력을 확인한 뒤 다시 응시하는 것이 좋습니다.</p>}
-          {usedBackup && model === BACKUP_EVAL_MODEL && (
-            <p className="mt-4 text-[14px] leading-relaxed text-ink-2">
-              보조 음성인식으로 받아쓴 시험이라 Gemini 3.5 Flash-Lite를 골라 두었습니다. 받아쓰기와 같은 무료 한도를 쓰기 때문에, 한도가 가장 넉넉한 모델로 평가합니다.
-            </p>
-          )}
-          <div className="mt-8">
-            <ModelPicker value={model} onChange={setModel} />
-          </div>
           {error && <p className="mt-6 text-[14px] leading-relaxed text-pen-ink">{error}</p>}
-          <div className="mt-10 flex items-center justify-end gap-2">
-            {evaluation && (
-              <Button variant="quiet" onClick={() => setPicking(false)}>
-                취소
-              </Button>
-            )}
-            <Button onClick={run} disabled={!model || transcribed === 0 || retrying}>
-              평가 시작
+          <div className="mt-10 flex justify-end">
+            <Button onClick={run} disabled={transcribed === 0 || retrying}>
+              {error ? "다시 시도" : "평가 시작"}
               <Icon name="arrow" className="size-4" />
             </Button>
           </div>
@@ -243,7 +222,7 @@ export function ReportApp({ id }: { id: string }) {
         >
           {result.evaluations.map((e) => (
             <option key={e.id} value={e.id}>
-              {modelById(e.modelId)?.label ?? e.modelId} · {new Date(e.createdAt).toLocaleString("ko-KR", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+              {modelLabel(e.modelId)} · {new Date(e.createdAt).toLocaleString("ko-KR", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })}
               {e.overall ? ` · ${e.overall.grade}` : ""}
             </option>
           ))}
@@ -256,7 +235,7 @@ export function ReportApp({ id }: { id: string }) {
       <Report
         result={result}
         evaluation={evaluation}
-        onReevaluate={() => setPicking(true)}
+        onReevaluate={run}
         history={history}
         missing={missing}
         onRetranscribe={retranscribe}

@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { Orb } from "@/components/exam/Orb";
 import { Button, Icon, Spinner } from "@/components/ui";
 import { Recorder, speak, useMicLevel, type Recording, type Speech } from "@/lib/client/audio";
 import { formatClock } from "@/lib/metrics";
@@ -9,33 +10,9 @@ export const REPLAY_WINDOW_MS = 5000;
 
 type Phase = "ready" | "playing" | "answering" | "saving";
 
-/** The interviewer. Rings breathe while she speaks; while you answer, the ring follows your voice. */
+/** The interviewer: an orb of light that ripples while she speaks and follows your voice while you answer. */
 function Ava({ phase, level }: { phase: Phase; level: number }) {
-  const speaking = phase === "playing";
-  const listening = phase === "answering";
-  return (
-    <div className="relative flex size-[200px] items-center justify-center" aria-hidden>
-      {speaking && (
-        <>
-          <span className="absolute inset-0 rounded-full border border-ink/25" style={{ animation: "breathe 2.4s ease-in-out infinite" }} />
-          <span className="absolute inset-5 rounded-full border border-ink/30" style={{ animation: "breathe 2.4s ease-in-out 0.6s infinite" }} />
-        </>
-      )}
-      {listening && (
-        <span
-          className="absolute inset-4 rounded-full border-2 border-pen/60 transition-transform duration-100"
-          style={{ transform: `scale(${1 + level * 0.22})` }}
-        />
-      )}
-      <div
-        className={`relative flex size-[132px] items-center justify-center rounded-full transition-colors duration-300 ${
-          listening ? "bg-ink" : speaking ? "bg-ink" : "bg-ink/90"
-        }`}
-      >
-        <span className="text-[22px] font-semibold tracking-[-0.01em] text-paper">Ava</span>
-      </div>
-    </div>
-  );
+  return <Orb mode={phase === "playing" ? "speaking" : phase === "answering" ? "listening" : "idle"} level={level} size={240} />;
 }
 
 export function QuestionStage({

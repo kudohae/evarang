@@ -110,7 +110,12 @@ export function Home() {
 
         <footer className="mt-20 border-t border-line pt-6 text-[13px] leading-relaxed text-ink-3">
           <p>예상 등급은 공식 OPIc 결과가 아닙니다. 발음은 평가하지 않습니다.</p>
-          <p>녹음과 결과는 이 브라우저에만 저장됩니다. 받아쓰기와 평가를 위해 녹음과 받아쓴 글이 음성인식·평가 서비스로 전송됩니다.</p>
+          <p>녹음과 결과는 이 브라우저에 저장됩니다. 받아쓰기와 평가를 위해 녹음과 받아쓴 글이 음성인식·평가 서비스로 전송되고, 예측 개선용 저장에 동의한 경우에만 서버에 보관됩니다.</p>
+          <p className="mt-2">
+            <a href="/privacy" className="underline underline-offset-4 hover:text-ink-2">
+              개인정보 처리방침
+            </a>
+          </p>
         </footer>
       </main>
     </div>

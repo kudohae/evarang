@@ -11,6 +11,8 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.133.0",
     "@google/genai": "^2.28.0",
+    "@neondatabase/serverless": "^1.2.0",
+    "@vercel/blob": "^2.8.1",
     "assemblyai": "^4.41.5",
     "next": "^16.4.0",
     "react": "^19.3.0",

@@ -10,6 +10,7 @@ import { Button, Icon, Spinner, Wordmark } from "@/components/ui";
 import { evaluate, type Progress } from "@/lib/client/evaluate";
 import { getAudio, getResult, putResult } from "@/lib/client/db";
 import { transcribeBlob } from "@/lib/client/transcribe";
+import { deleteResearch, researchSignature, syncResearch, wantsResearch } from "@/lib/client/research";
 import { FallbackNotice } from "@/components/FallbackNotice";
 import type { FallbackReason, Grade } from "@/lib/types";
 import type { ExamResult } from "@/lib/exam/result";
@@ -91,6 +92,23 @@ export function ReportApp({ id }: { id: string }) {
       setError((e as Error).message);
       setWaiting(null);
     }
+  };
+
+  // Research copy: send whenever its content changes (evaluation, real grade, transcripts). Failures wait for the next change.
+  const lastSig = useRef("");
+  useEffect(() => {
+    if (!result || !wantsResearch(result)) return;
+    const sig = researchSignature(result);
+    if (sig === lastSig.current) return;
+    lastSig.current = sig;
+    void syncResearch(result).then((research) => save((r) => ({ ...r, research: { ...research, deleted: r.research?.deleted } })));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [result]);
+
+  const removeResearch = async () => {
+    if (!result) return;
+    await deleteResearch(result);
+    await save((r) => ({ ...r, research: r.research ? { ...r.research, deleted: true } : r.research }));
   };
 
   const answerActualGrade = (g: Grade | "none") => void save((r) => ({ ...r, actualGrade: g }));
@@ -244,6 +262,7 @@ export function ReportApp({ id }: { id: string }) {
         onRetranscribe={retranscribe}
         retrying={retrying}
         retryError={error}
+        onDeleteResearch={result.consent?.research ? removeResearch : undefined}
       />
       {notice && <FallbackNotice reason={notice} during="after" onClose={() => setNotice(null)} />}
     </Shell>

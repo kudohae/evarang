@@ -16,6 +16,12 @@
    | `XAI_API_KEY` | | Grok (유료) |
    | `ANTHROPIC_API_KEY` | | Claude Haiku / Sonnet / Opus |
    | `GROQ_API_KEY` | | Llama 3.3 70B (무료 등급) |
+   | `DATABASE_URL` | 수집 시 | Neon Postgres 연결 문자열. Vercel Storage에서 Neon을 연결하면 자동으로 들어갑니다(`POSTGRES_URL`도 인식). |
+   | `BLOB_READ_WRITE_TOKEN` | 수집 시 | Vercel Blob 토큰. Blob 스토어를 프로젝트에 연결하면 자동으로 들어갑니다. 스토어는 Private 접근이어야 합니다. |
+   | `ADMIN_CODE` | 수집 시 | `/admin` 관리자 화면 코드. 접근 코드와 다르게, 길게 정하세요. 비워두면 관리자 화면이 닫힙니다. |
+   | `CRON_SECRET` | 권장 | 매일 03:00(KST) 만료 기록 삭제 작업의 인증값. 넣어두면 Vercel Cron만 그 작업을 부를 수 있습니다. |
+   | `PRIVACY_OPERATOR` | 수집 시 | 개인정보 처리방침에 표시할 운영자 이름 |
+   | `PRIVACY_CONTACT` | 수집 시 | 개인정보 문의 연락처(이메일) |
 
 4. **Deploy**를 누릅니다. 이후 연결된 브랜치에 push할 때마다 자동으로 다시 배포됩니다.
 
@@ -41,6 +47,10 @@ src/
     api/transcribe        녹음 → AssemblyAI (Universal-3.5 Pro, disfluencies: true)
     api/evaluate/*        문항별 첨삭(5문항씩 묶음), 종합 판정
     api/access            접근 코드 확인 → httpOnly 쿠키
+    api/records           동의한 시험의 저장·녹음 업로드·삭제
+    api/admin/*           관리자 화면용 목록, 기록, 녹음
+    api/cron/purge        보유 기간이 지난 기록 삭제 (vercel.json)
+    privacy               개인정보 처리방침
   components/exam/        시험 화면 (설문, 자가평가, 장비 점검, 문항, 재조정)
   components/report/      평가 보고서
   lib/content/            설문 항목, 자가평가 단계, 문항 은행 (설문 주제 63개, 돌발 주제 15개)
@@ -49,7 +59,16 @@ src/
   lib/server/llm.ts       모델 공급자별 호출 (Anthropic, Gemini, Groq, xAI)
 ```
 
-녹음과 결과는 사용자의 브라우저(IndexedDB)에만 저장됩니다. 서버는 받아쓰기와 평가 요청을 중계할 뿐 저장하지 않습니다.
+녹음과 결과는 사용자의 브라우저(IndexedDB)에 저장됩니다. 서버에는 "예측 개선을 위한 저장"에 동의한 시험만 남습니다.
+
+## 동의와 데이터 수집
+
+- **동의 화면:** 시험 안내 다음, Background Survey 전에 나옵니다. 해외 전송(AssemblyAI·Google·Anthropic·xAI·Groq)과 만 14세 이상은 필수, 예측 개선용 저장은 선택입니다. 저장소(`DATABASE_URL`, `BLOB_READ_WRITE_TOKEN`)가 설정되지 않았으면 선택 항목은 보이지 않습니다. 전문은 `/privacy`.
+- **저장하는 것:** 설문 답변, 자가평가, 문항, 받아쓴 글과 지표, 평가 결과, 대기 화면에서 고른 실제 OPIc 등급(Postgres `exam_records` 표), 답변 녹음(Blob `exams/{기록번호}/{문항}.webm`, 비공개).
+- **언제:** 보고서 화면이 열려 있을 때 내용이 바뀔 때마다 다시 보냅니다(평가 완료, 실제 등급 입력, 재평가). 실패하면 보고서 아래에 이유가 나오고 다음 변경 때 다시 시도합니다.
+- **삭제:** 사용자는 보고서 아래 "저장된 데이터 삭제"로 지웁니다. 브라우저에만 있는 비밀값으로 본인을 확인하므로, 브라우저 데이터를 지우면 그 기록은 직접 지울 수 없게 됩니다(그때는 문의 연락처로 기록 번호를 받아 관리자가 지웁니다). 보유 기간 2년이 지나면 매일 03:00 작업과 관리자 화면을 열 때 자동으로 지워집니다.
+- **관리자 화면:** `/admin`에서 `ADMIN_CODE`로 들어갑니다. 기록 목록, 예상 등급과 실제 등급의 일치율(정확히 일치, 한 단계 이내, 평균 차이), 기록별 보고서와 녹음 재생, 삭제가 있습니다.
+- **확인하지 못한 것:** 개발 환경에서 Neon과 Blob에 접속할 수 없어 실제 저장은 시험해보지 못했습니다. SQL은 PGlite로 검증했습니다. 배포한 뒤 동의하고 시험을 한 번 본 다음 `/admin`에 기록과 녹음이 보이는지 확인하세요.
 
 ## 음성인식이 안 될 때
 

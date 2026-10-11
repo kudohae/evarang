@@ -7,6 +7,8 @@ export type Config = {
   accessRequired: boolean;
   hasAccess: boolean;
   stt: boolean;
+  /** Server can store research records (database and blob store configured). */
+  research: boolean;
   models: { id: string; available: boolean }[];
 };
 

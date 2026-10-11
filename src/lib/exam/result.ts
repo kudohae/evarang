@@ -26,7 +26,13 @@ export type ExamResult = {
   evaluations: Evaluation[];
   /** The candidate's real OPIc grade, if they have one. Never sent to the evaluator; kept to compare estimates against. */
   actualGrade?: Grade | "none";
+  /** What the candidate agreed to before the survey. */
+  consent?: { version: string; research: boolean; at: number };
+  /** Local bookkeeping for the research copy. The secret never leaves this browser except to prove ownership. */
+  research?: { secret: string; uploaded: number[]; syncedAt?: number; deleted?: boolean; error?: string };
 };
+
+export const CONSENT_VERSION = "2026-10-11";
 
 export function latestEvaluation(r: ExamResult): Evaluation | undefined {
   return r.evaluations[r.evaluations.length - 1];

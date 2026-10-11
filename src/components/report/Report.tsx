@@ -46,6 +46,8 @@ export function Report({
   onRetranscribe,
   retrying,
   retryError,
+  onDeleteResearch,
+  readOnly = false,
 }: {
   result: ExamResult;
   evaluation: Evaluation;
@@ -55,7 +57,11 @@ export function Report({
   onRetranscribe: () => void;
   retrying: boolean;
   retryError: string;
+  onDeleteResearch?: () => Promise<void>;
+  /** Admin view: no re-evaluation, re-transcription or deletion controls. */
+  readOnly?: boolean;
 }) {
+  const [deleting, setDeleting] = useState<"idle" | "busy" | "error">("idle");
   const o = evaluation.overall;
   const model = modelById(evaluation.modelId);
   const perAnswer = useMemo(() => result.answers.map((a) => ({ number: a.number, m: answerMetrics(a) })), [result.answers]);
@@ -109,7 +115,7 @@ export function Report({
           {history}
         </div>
 
-        {missing > 0 && (
+        {missing > 0 && !readOnly && (
           <div className="no-print mt-6 rounded-panel border border-line bg-surface px-5 py-4 text-[14px] leading-relaxed">
             <p>답변 {missing}개는 받아쓰지 못해 이 평가에서 빠졌습니다. 다시 받아쓰면 그 답변까지 넣어 다시 평가할 수 있습니다.</p>
             {retryError && <p className="mt-1 text-pen-ink">{retryError}</p>}
@@ -316,10 +322,45 @@ export function Report({
             {llmCost !== null ? ` · 약 $${llmCost.toFixed(3)}` : " · 무료 등급 또는 가격 미상"} · 음성인식 {formatClock(sttSeconds)} · 약 ${sttCost.toFixed(3)}
           </p>
           <p className="mt-1">예상 등급은 공식 OPIc 결과가 아닙니다. 발음은 평가하지 않았습니다.</p>
+          {result.actualGrade && !readOnly && (
+            <p className="mt-1">입력한 실제 OPIc 등급: {result.actualGrade === "none" ? "응시 경험 없음" : result.actualGrade}</p>
+          )}
+          {onDeleteResearch && result.research && !readOnly && (
+            <div className="no-print mt-4">
+              {result.research.deleted ? (
+                <p>예측 개선용으로 저장했던 이 시험의 데이터를 삭제했습니다.</p>
+              ) : (
+                <p>
+                  이 시험은 예측 개선용으로 저장되어 있습니다 (기록 번호 <span className="tabular">{result.id}</span>, 2년 후 자동 삭제).
+                  {result.research.error && ` 마지막 저장에 실패했습니다: ${result.research.error}`}{" "}
+                  <button
+                    type="button"
+                    disabled={deleting === "busy"}
+                    onClick={async () => {
+                      if (!window.confirm("저장된 녹음과 답변, 평가 결과를 서버에서 삭제합니다. 이 브라우저의 기록은 남습니다.")) return;
+                      setDeleting("busy");
+                      try {
+                        await onDeleteResearch();
+                        setDeleting("idle");
+                      } catch {
+                        setDeleting("error");
+                      }
+                    }}
+                    className="font-semibold text-ink-2 underline underline-offset-4 hover:text-ink"
+                  >
+                    {deleting === "busy" ? "삭제하는 중…" : "저장된 데이터 삭제"}
+                  </button>
+                  {deleting === "error" && <span className="text-pen-ink"> 삭제하지 못했습니다. 잠시 후 다시 시도하세요.</span>}
+                </p>
+              )}
+            </div>
+          )}
           <div className="no-print mt-5 flex flex-wrap gap-2">
-            <Button variant="secondary" onClick={onReevaluate}>
-              다른 모델로 다시 평가
-            </Button>
+            {!readOnly && (
+              <Button variant="secondary" onClick={onReevaluate}>
+                다른 모델로 다시 평가
+              </Button>
+            )}
             <Button variant="quiet" onClick={() => window.print()}>
               인쇄
             </Button>

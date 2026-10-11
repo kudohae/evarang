@@ -20,7 +20,11 @@ function AudioPlayer({ audioKey, fallbackSeconds }: { audioKey: string; fallback
 
   useEffect(() => {
     let u = "";
-    void getAudio(audioKey).then((b) => {
+    // Admin view passes "remote:<blob path>"; everyone else plays the copy kept in their own browser.
+    const load = audioKey.startsWith("remote:")
+      ? fetch(`/api/admin/audio?path=${encodeURIComponent(audioKey.slice(7))}`).then((r) => (r.ok ? r.blob() : undefined))
+      : getAudio(audioKey);
+    void load.then((b) => {
       if (b && b.size) {
         u = URL.createObjectURL(b);
         setUrl(u);

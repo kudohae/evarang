@@ -4,6 +4,8 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button, ChoiceRow, Icon, Spinner, Wordmark } from "@/components/ui";
 import { Frame } from "@/components/exam/Frame";
+import { Consent, type ConsentAnswers } from "@/components/exam/Consent";
+import { newSecret } from "@/lib/client/research";
 import { FallbackNotice } from "@/components/FallbackNotice";
 import { transcribeBlob } from "@/lib/client/transcribe";
 import { QuestionStage } from "@/components/exam/QuestionStage";
@@ -14,14 +16,14 @@ import { resolveVoice, useVoices, type Recording } from "@/lib/client/audio";
 import { putAudio, putResult } from "@/lib/client/db";
 import { SAMPLE_QUESTION } from "@/lib/content/levels";
 import { adjustLevel, composeSession1, composeSession2, questionCount } from "@/lib/exam/compose";
-import { newId, type ExamResult } from "@/lib/exam/result";
+import { CONSENT_VERSION, newId, type ExamResult } from "@/lib/exam/result";
 import { formatClock } from "@/lib/metrics";
 import type { Adjustment, AnswerRecord, ExamQuestion, FallbackReason, Level, SurveyAnswers } from "@/lib/types";
 
 const TEST_MS = 40 * 60 * 1000;
 const SESSION1_LAST = 7;
 
-type Step = "overview" | "survey" | "self" | "setup" | "sample" | "begin" | "question" | "adjust" | "finish";
+type Step = "overview" | "consent" | "survey" | "self" | "setup" | "sample" | "begin" | "question" | "adjust" | "finish";
 
 type Pending = Record<number, "uploading" | "done" | "error">;
 
@@ -58,6 +60,7 @@ export function ExamApp() {
   const voice = useMemo(() => resolveVoice(voices), [voices]);
 
   const [step, setStep] = useState<Step>("overview");
+  const [consent, setConsent] = useState<ConsentAnswers>({ transfer: false, age: false, research: false });
   const [surveyPage, setSurveyPage] = useState(0);
   const [survey, setSurvey] = useState<SurveyAnswers>(EMPTY_SURVEY);
   const [startLevel, setStartLevel] = useState<Level | null>(null);
@@ -182,10 +185,12 @@ export function ExamApp() {
       questions: questions.filter((q) => answered.has(q.number)),
       answers: [...answers].sort((a, b) => a.number - b.number),
       evaluations: [],
+      consent: { version: CONSENT_VERSION, research: consent.research, at: createdAt.current },
+      ...(consent.research ? { research: { secret: newSecret(), uploaded: [] } } : {}),
     };
     await putResult(result.id, result);
     router.replace(`/results/${result.id}`);
-  }, [adjustment, answers, finalLevel, questions, router, startLevel, survey, timedOut]);
+  }, [adjustment, answers, consent.research, finalLevel, questions, router, startLevel, survey, timedOut]);
 
   useEffect(() => {
     if (settled && failed.length === 0 && !noticeOpen) void save();
@@ -200,7 +205,7 @@ export function ExamApp() {
         title="오리엔테이션"
         lead="실제 OPIc과 같은 순서로 진행합니다. 시작하면 중간에 멈출 수 없으니 조용한 곳에서 이어폰이나 스피커를 준비하세요."
         actions={
-          <Button onClick={() => setStep("survey")}>
+          <Button onClick={() => setStep("consent")}>
             시작
             <Icon name="arrow" className="size-4" />
           </Button>
@@ -228,13 +233,17 @@ export function ExamApp() {
     );
   }
 
+  if (step === "consent") {
+    return <Consent value={consent} onChange={setConsent} onBack={() => setStep("overview")} onNext={() => setStep("survey")} />;
+  }
+
   if (step === "survey") {
     return (
       <Survey
         page={surveyPage}
         answers={survey}
         onChange={setSurvey}
-        onBack={() => (surveyPage === 0 ? setStep("overview") : setSurveyPage(surveyPage - 1))}
+        onBack={() => (surveyPage === 0 ? setStep("consent") : setSurveyPage(surveyPage - 1))}
         onNext={() => (surveyPage === 3 ? setStep("self") : setSurveyPage(surveyPage + 1))}
       />
     );

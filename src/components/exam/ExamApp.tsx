@@ -4,6 +4,8 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button, ChoiceRow, Icon, Spinner, Wordmark } from "@/components/ui";
 import { Frame } from "@/components/exam/Frame";
+import { FallbackNotice } from "@/components/FallbackNotice";
+import { transcribeBlob } from "@/lib/client/transcribe";
 import { QuestionStage } from "@/components/exam/QuestionStage";
 import { SelfAssessment } from "@/components/exam/SelfAssessment";
 import { Setup } from "@/components/exam/Setup";
@@ -14,7 +16,7 @@ import { SAMPLE_QUESTION } from "@/lib/content/levels";
 import { adjustLevel, composeSession1, composeSession2, questionCount } from "@/lib/exam/compose";
 import { newId, type ExamResult } from "@/lib/exam/result";
 import { formatClock } from "@/lib/metrics";
-import type { Adjustment, AnswerRecord, ExamQuestion, Level, SurveyAnswers, Transcript } from "@/lib/types";
+import type { Adjustment, AnswerRecord, ExamQuestion, FallbackReason, Level, SurveyAnswers } from "@/lib/types";
 
 const TEST_MS = 40 * 60 * 1000;
 const SESSION1_LAST = 7;
@@ -22,13 +24,6 @@ const SESSION1_LAST = 7;
 type Step = "overview" | "survey" | "self" | "setup" | "sample" | "begin" | "question" | "adjust" | "finish";
 
 type Pending = Record<number, "uploading" | "done" | "error">;
-
-async function transcribe(blob: Blob): Promise<Transcript> {
-  const res = await fetch("/api/transcribe", { method: "POST", body: blob, headers: { "content-type": blob.type || "audio/webm" } });
-  const body = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(body.error ?? `받아쓰기 실패 (${res.status})`);
-  return body as Transcript;
-}
 
 function TestHeader({ number, total, deadline }: { number: number; total: number; deadline: number }) {
   const [now, setNow] = useState(() => Date.now());
@@ -80,7 +75,11 @@ export function ExamApp() {
 
   const [answers, setAnswers] = useState<AnswerRecord[]>([]);
   const [pending, setPending] = useState<Pending>({});
-  const blobs = useRef(new Map<number, Blob>());
+  const blobs = useRef(new Map<number, { blob: Blob; durationMs: number }>());
+  // The fallback notice appears at most once: in setup, or after the test if credit ran out mid-way. Never during a question.
+  const fallbackSeen = useRef(false);
+  const [pendingNotice, setPendingNotice] = useState<FallbackReason | null>(null);
+  const [noticeOpen, setNoticeOpen] = useState(false);
   const examId = useRef(newId());
   const createdAt = useRef(Date.now());
   const saved = useRef(false);
@@ -98,11 +97,15 @@ export function ExamApp() {
   const total = finalLevel ? questionCount(finalLevel) : startLevel ? questionCount(startLevel) : 15;
 
   const runTranscription = useCallback(async (number: number) => {
-    const blob = blobs.current.get(number);
-    if (!blob) return;
+    const rec = blobs.current.get(number);
+    if (!rec) return;
     setPending((p) => ({ ...p, [number]: "uploading" }));
     try {
-      const transcript = blob.size ? await transcribe(blob) : { text: "", words: [], audioSeconds: 0 };
+      const { transcript, fallback } = await transcribeBlob(rec.blob, rec.durationMs);
+      if (fallback && !fallbackSeen.current) {
+        fallbackSeen.current = true;
+        setPendingNotice(fallback);
+      }
       setAnswers((list) => list.map((a) => (a.number === number ? { ...a, transcript, transcriptError: undefined } : a)));
       setPending((p) => ({ ...p, [number]: "done" }));
     } catch (e) {
@@ -127,10 +130,14 @@ export function ExamApp() {
     setStep("finish");
   };
 
+  useEffect(() => {
+    if (step === "finish" && pendingNotice) setNoticeOpen(true);
+  }, [step, pendingNotice]);
+
   const onAnswer = async (rec: Recording, replayed: boolean) => {
     const q = questions[index];
     const audioKey = `${examId.current}:${q.number}`;
-    blobs.current.set(q.number, rec.blob);
+    blobs.current.set(q.number, { blob: rec.blob, durationMs: rec.durationMs });
     await putAudio(audioKey, rec.blob).catch(() => {});
     setAnswers((list) => [
       ...list.filter((a) => a.number !== q.number),
@@ -181,8 +188,8 @@ export function ExamApp() {
   }, [adjustment, answers, finalLevel, questions, router, startLevel, survey, timedOut]);
 
   useEffect(() => {
-    if (settled && failed.length === 0) void save();
-  }, [settled, failed.length, save]);
+    if (settled && failed.length === 0 && !noticeOpen) void save();
+  }, [settled, failed.length, noticeOpen, save]);
 
   // ── Screens ───────────────────────────────────────────
 
@@ -238,7 +245,13 @@ export function ExamApp() {
   }
 
   if (step === "setup") {
-    return <Setup stream={stream} onStream={setStream} onBack={() => setStep("self")} onNext={() => setStep("sample")} />;
+    return <Setup
+        stream={stream}
+        onStream={setStream}
+        onFallback={() => (fallbackSeen.current = true)}
+        onBack={() => setStep("self")}
+        onNext={() => setStep("sample")}
+      />;
   }
 
   if (step === "sample" && stream) {
@@ -360,9 +373,11 @@ export function ExamApp() {
         step={null}
         title={timedOut ? "시험 시간이 끝났습니다" : "시험이 끝났습니다"}
         lead={
-          timedOut
-            ? `40분 안에 ${answers.length}개 문항에 답했습니다. 답한 문항까지만 평가합니다.`
-            : "답변을 받아쓰는 중입니다. 끝나면 평가 화면으로 넘어갑니다."
+          settled && failed.length > 0
+            ? `답변 ${failed.length}개를 받아쓰지 못했습니다. 다시 시도하거나, 그 답변을 빼고 평가로 넘어갈 수 있습니다. 녹음은 남아 있어 평가 화면에서도 다시 받아쓸 수 있습니다.`
+            : timedOut
+              ? `40분 안에 ${answers.length}개 문항에 답했습니다. 답한 문항까지만 평가합니다.`
+              : "답변을 받아쓰는 중입니다. 끝나면 평가 화면으로 넘어갑니다."
         }
         aside={<span className="tabular">받아쓰기 {done} / {answers.length}</span>}
         actions={
@@ -381,6 +396,16 @@ export function ExamApp() {
         <div className="h-1 w-full overflow-hidden rounded-full bg-line">
           <div className="h-full rounded-full bg-ink transition-[width] duration-500" style={{ width: `${answers.length ? (done / answers.length) * 100 : 0}%` }} />
         </div>
+        {noticeOpen && pendingNotice && (
+          <FallbackNotice
+            reason={pendingNotice}
+            during="after"
+            onClose={() => {
+              setNoticeOpen(false);
+              setPendingNotice(null);
+            }}
+          />
+        )}
         {failed.length > 0 && settled && (
           <div className="mt-8 text-[15px] leading-relaxed">
             <p className="font-semibold">받아쓰지 못한 답변이 있습니다.</p>

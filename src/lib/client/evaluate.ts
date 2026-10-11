@@ -17,14 +17,18 @@ async function post<T>(path: string, body: unknown): Promise<T & { usage: Usage 
   return data;
 }
 
+/** Answers whose transcription failed are left out: grading them as silence would be unfair. */
 export function buildItems(r: ExamResult): EvalItem[] {
-  return r.questions.map((question) => {
+  return r.questions.flatMap((question) => {
     const answer = r.answers.find((a) => a.number === question.number);
-    return {
-      question,
-      transcript: answer?.transcript?.text ?? "",
-      metrics: answer ? answerMetrics(answer) : null,
-    };
+    if (!answer?.transcript) return [];
+    return [
+      {
+        question,
+        transcript: answer.transcript.text,
+        metrics: answerMetrics(answer),
+      },
+    ];
   });
 }
 
@@ -32,6 +36,7 @@ export async function evaluate(r: ExamResult, modelId: string, onProgress: (p: P
   const model = modelById(modelId);
   if (!model) throw new Error("알 수 없는 모델입니다.");
   const items = buildItems(r);
+  if (!items.length) throw new Error("받아쓴 답변이 없어 평가할 수 없습니다.");
   const ctx = (subset: EvalItem[]): EvalContext => ({ startLevel: r.startLevel, finalLevel: r.finalLevel, items: subset });
   const batches: EvalItem[][] = [];
   for (let i = 0; i < items.length; i += BATCH) batches.push(items.slice(i, i + BATCH));

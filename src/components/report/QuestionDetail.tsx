@@ -127,6 +127,7 @@ export function QuestionDetail({ question, answer, feedback }: { question: ExamQ
         <p className="tabular mt-3 text-[13px] text-ink-2">
           {formatClock(m.seconds)} 답변 · 분당 {Math.round(m.wpm)}단어 · 군말 {m.fillers}회 · 2초 이상 멈춤 {m.longPauses}회
           {m.startDelay >= 3 && ` · 첫 마디까지 ${m.startDelay.toFixed(1)}초`}
+          {answer?.transcript?.approxTiming && " · 멈춤·속도는 추정치"}
         </p>
       )}
 

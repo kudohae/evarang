@@ -7,7 +7,10 @@ import { ModelPicker, preferredModel, rememberModel } from "@/components/report/
 import { Report } from "@/components/report/Report";
 import { Button, Icon, Spinner, Wordmark } from "@/components/ui";
 import { evaluate, type Progress } from "@/lib/client/evaluate";
-import { getResult, putResult } from "@/lib/client/db";
+import { getAudio, getResult, putResult } from "@/lib/client/db";
+import { transcribeBlob } from "@/lib/client/transcribe";
+import { FallbackNotice } from "@/components/FallbackNotice";
+import type { FallbackReason } from "@/lib/types";
 import type { ExamResult } from "@/lib/exam/result";
 import { modelById } from "@/lib/models";
 
@@ -35,6 +38,8 @@ export function ReportApp({ id }: { id: string }) {
   const [progress, setProgress] = useState<Progress | null>(null);
   const [error, setError] = useState("");
   const [shown, setShown] = useState<string | null>(null);
+  const [retrying, setRetrying] = useState(false);
+  const [notice, setNotice] = useState<FallbackReason | null>(null);
 
   useEffect(() => {
     void getResult<ExamResult>(id).then((r) => setResult(r ?? null));
@@ -63,6 +68,38 @@ export function ReportApp({ id }: { id: string }) {
       setProgress(null);
     }
   };
+
+  /** Re-runs transcription for answers that failed, from the recordings kept in this browser. */
+  const retranscribe = async () => {
+    if (!result) return;
+    setRetrying(true);
+    setError("");
+    let answers = result.answers;
+    let fallback: FallbackReason | undefined;
+    const errors: string[] = [];
+    for (const a of result.answers.filter((x) => !x.transcript)) {
+      try {
+        const blob = await getAudio(a.audioKey);
+        if (!blob) throw new Error("녹음 파일이 이 브라우저에 없습니다.");
+        const r = await transcribeBlob(blob, a.durationMs);
+        fallback ??= r.fallback;
+        answers = answers.map((x) => (x.number === a.number ? { ...x, transcript: r.transcript, transcriptError: undefined } : x));
+      } catch (e) {
+        errors.push(`${a.number}번: ${(e as Error).message}`);
+        answers = answers.map((x) => (x.number === a.number ? { ...x, transcriptError: (e as Error).message } : x));
+      }
+    }
+    const next = { ...result, answers };
+    await putResult(next.id, next);
+    setResult(next);
+    setRetrying(false);
+    if (errors.length) setError(`다시 받아쓰지 못한 답변이 있습니다. ${errors[0]}`);
+    if (fallback) setNotice(fallback);
+    if (next.evaluations.length && answers.some((x, i) => x.transcript && !result.answers[i].transcript)) setPicking(true);
+  };
+
+  const missing = result ? result.answers.filter((a) => !a.transcript).length : 0;
+  const transcribed = result ? result.answers.filter((a) => a.transcript).length : 0;
 
   if (result === undefined) {
     return (
@@ -112,14 +149,25 @@ export function ReportApp({ id }: { id: string }) {
   const evaluation = result.evaluations.find((e) => e.id === shown) ?? result.evaluations[result.evaluations.length - 1];
 
   if (!evaluation || picking) {
-    const empty = result.answers.every((a) => !a.transcript?.text.trim());
+    const empty = transcribed > 0 && result.answers.every((a) => !a.transcript?.text.trim());
     return (
       <Shell>
         <main className="rise mx-auto max-w-[640px] px-5 pb-24 pt-14">
           <h1 className="text-[26px] font-bold tracking-[-0.02em]">평가 모델 선택</h1>
           <p className="mt-3 text-[15px] leading-relaxed text-ink-2">
-            답변 {result.answers.length}개를 받아썼습니다. 어떤 모델로 평가할지 고르세요. 같은 시험을 나중에 다른 모델로 다시 평가해 비교할 수 있습니다.
+            답변 {transcribed}개를 받아썼습니다. 어떤 모델로 평가할지 고르세요. 같은 시험을 나중에 다른 모델로 다시 평가해 비교할 수 있습니다.
           </p>
+          {missing > 0 && (
+            <div className="mt-6 rounded-panel border border-line bg-surface px-5 py-4">
+              <p className="text-[15px] leading-relaxed">
+                {transcribed === 0 ? "아직 받아쓴 답변이 없어 평가할 수 없습니다." : `답변 ${missing}개는 받아쓰지 못해 평가에서 빠집니다.`} 녹음은 이 브라우저에 남아 있으니 다시 받아쓸 수 있습니다.
+              </p>
+              <Button className="mt-3" variant="secondary" onClick={retranscribe} disabled={retrying}>
+                {retrying ? <Spinner /> : null}
+                {retrying ? "받아쓰는 중" : "다시 받아쓰기"}
+              </Button>
+            </div>
+          )}
           {empty && <p className="mt-4 text-[15px] text-pen-ink">받아쓴 답변이 모두 비어 있습니다. 마이크 입력을 확인한 뒤 다시 응시하는 것이 좋습니다.</p>}
           <div className="mt-8">
             <ModelPicker value={model} onChange={setModel} />
@@ -131,12 +179,13 @@ export function ReportApp({ id }: { id: string }) {
                 취소
               </Button>
             )}
-            <Button onClick={run} disabled={!model}>
+            <Button onClick={run} disabled={!model || transcribed === 0 || retrying}>
               평가 시작
               <Icon name="arrow" className="size-4" />
             </Button>
           </div>
         </main>
+        {notice && <FallbackNotice reason={notice} during="after" onClose={() => setNotice(null)} />}
       </Shell>
     );
   }
@@ -162,7 +211,17 @@ export function ReportApp({ id }: { id: string }) {
 
   return (
     <Shell>
-      <Report result={result} evaluation={evaluation} onReevaluate={() => setPicking(true)} history={history} />
+      <Report
+        result={result}
+        evaluation={evaluation}
+        onReevaluate={() => setPicking(true)}
+        history={history}
+        missing={missing}
+        onRetranscribe={retranscribe}
+        retrying={retrying}
+        retryError={error}
+      />
+      {notice && <FallbackNotice reason={notice} during="after" onClose={() => setNotice(null)} />}
     </Shell>
   );
 }

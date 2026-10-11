@@ -1,5 +1,5 @@
 import Link from "next/link";
-import type { ButtonHTMLAttributes, ReactNode } from "react";
+import type { ComponentProps, ReactNode } from "react";
 
 type Variant = "primary" | "secondary" | "quiet";
 
@@ -14,7 +14,7 @@ export function Button({
   size = "md",
   className = "",
   ...props
-}: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: Variant; size?: "md" | "lg" }) {
+}: ComponentProps<"button"> & { variant?: Variant; size?: "md" | "lg" }) {
   const sizing = size === "lg" ? "h-13 px-7 text-[16px]" : "h-11 px-5 text-[15px]";
   return (
     <button

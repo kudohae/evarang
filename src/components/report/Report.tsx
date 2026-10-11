@@ -42,11 +42,19 @@ export function Report({
   evaluation,
   onReevaluate,
   history,
+  missing,
+  onRetranscribe,
+  retrying,
+  retryError,
 }: {
   result: ExamResult;
   evaluation: Evaluation;
   onReevaluate: () => void;
   history: React.ReactNode;
+  missing: number;
+  onRetranscribe: () => void;
+  retrying: boolean;
+  retryError: string;
 }) {
   const o = evaluation.overall;
   const model = modelById(evaluation.modelId);
@@ -61,6 +69,7 @@ export function Report({
     document.getElementById("answers")?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
+  const estimated = result.answers.filter((a) => a.transcript?.approxTiming).length;
   const sttSeconds = result.answers.reduce((s, a) => s + (a.transcript?.audioSeconds ?? a.durationMs / 1000), 0);
   const llmCost = model ? estimateCost(model, evaluation.usage) : null;
   const sttCost = (sttSeconds / 3600) * STT_USD_PER_HOUR;
@@ -99,6 +108,16 @@ export function Report({
           </p>
           {history}
         </div>
+
+        {missing > 0 && (
+          <div className="no-print mt-6 rounded-panel border border-line bg-surface px-5 py-4 text-[14px] leading-relaxed">
+            <p>답변 {missing}개는 받아쓰지 못해 이 평가에서 빠졌습니다. 다시 받아쓰면 그 답변까지 넣어 다시 평가할 수 있습니다.</p>
+            {retryError && <p className="mt-1 text-pen-ink">{retryError}</p>}
+            <button type="button" onClick={onRetranscribe} disabled={retrying} className="mt-2 font-semibold underline underline-offset-4 disabled:text-ink-3">
+              {retrying ? "받아쓰는 중…" : "다시 받아쓰기"}
+            </button>
+          </div>
+        )}
 
         {evaluation.errors.length > 0 && (
           <div className="mt-6 rounded-panel border border-pen/30 bg-pen-soft px-5 py-4 text-[14px] leading-relaxed text-pen-ink">
@@ -206,6 +225,11 @@ export function Report({
             <p className="mt-4 text-[14px] leading-relaxed text-ink-2">
               2초 이상 멈춘 곳은 모두 {totals.longPauses}번입니다. 답변 길이 자체는 등급을 정하지 않지만, 1분이 안 되는 답변은 문단을 만들 시간이 부족하다는 신호입니다.
             </p>
+            {estimated > 0 && (
+              <p className="mt-2 text-[13px] leading-relaxed text-ink-3">
+                {estimated === result.answers.length ? "이 시험은" : `답변 ${estimated}개는`} 보조 음성인식으로 받아써서, 멈춘 횟수와 분당 단어 수가 녹음의 소리 크기로 추정한 값입니다.
+              </p>
+            )}
           </Section>
 
           {o && o.patterns.length > 0 && (

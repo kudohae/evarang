@@ -44,7 +44,16 @@ export type Transcript = {
   text: string;
   words: TranscriptWord[];
   audioSeconds: number;
+  /** Which recogniser produced it. Missing on results saved before the fallback existed. */
+  engine?: "assemblyai" | "gemini";
+  /** Word timings were estimated from loudness, not returned by the recogniser. */
+  approxTiming?: boolean;
 };
+
+/** Why the backup recogniser was used: the primary ran out of credit, or failed for another reason. */
+export type FallbackReason = "credits" | "unavailable";
+
+export type TranscribeResponse = Transcript & { fallback?: FallbackReason };
 
 export type AnswerRecord = {
   number: number;

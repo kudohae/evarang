@@ -7,7 +7,7 @@ export async function GET() {
   return Response.json({
     accessRequired: accessRequired(),
     hasAccess: ok,
-    stt: Boolean(process.env.ASSEMBLYAI_API_KEY),
+    stt: Boolean(process.env.ASSEMBLYAI_API_KEY || process.env.GEMINI_API_KEY),
     models: MODELS.map((m) => ({ id: m.id, available: providerConfigured(m.provider) })),
   });
 }

@@ -18,8 +18,9 @@ function databaseUrl(): string | undefined {
   return process.env.DATABASE_URL || process.env.POSTGRES_URL;
 }
 
+/** Newer Vercel projects connect Blob with BLOB_STORE_ID and authenticate through OIDC; older ones get a read-write token. */
 export function storageConfigured(): boolean {
-  return Boolean(databaseUrl() && process.env.BLOB_READ_WRITE_TOKEN);
+  return Boolean(databaseUrl() && (process.env.BLOB_STORE_ID || process.env.BLOB_READ_WRITE_TOKEN));
 }
 
 export async function db(): Promise<NeonQueryFunction<false, false>> {

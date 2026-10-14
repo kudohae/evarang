@@ -90,7 +90,7 @@ type DocKind = "exam" | "session" | "note" | "story";
 ### 4.2 브라우저 (`docs/local.ts`)
 - IndexedDB 2판. 기존 `audio`, `results`는 그대로 두고 `docs`(키 `${kind}:${id}`), `sync`(키 같음) 저장소를 더한다.
 - `exam` 종류는 `results` 저장소를 읽고 쓴다. 기록을 옮기지 않는다. `ExamResult`에 `updatedAt`을 더하고, 없는 옛 기록은 `createdAt`으로 읽는다.
-- 동기화 장부(`sync`): `{ syncedAt?, signature?, uploaded: string[], error? }`. 지금 `ExamResult.account`에 든 값은 처음 열 때 `sync`로 옮기고 지운다. 서버로 보낼 때 떼어낼 로컬 필드는 `research`만 남는다.
+- 동기화 장부(`sync`): `{ pushedVersion?, syncedAt?, uploaded: string[], error? }`. `pushedVersion`은 마지막으로 보낸 기록의 `updatedAt`이다. 지금 `ExamResult.account`에 든 값은 처음 열 때 `sync`로 옮기고 지운다. 서버로 보낼 때 떼어낼 로컬 필드는 `research`만 남는다.
 - 인터페이스: `get(kind,id)`, `put(doc)`, `remove(kind,id)`(삭제 표시), `list(kind)`, `audio.get/put(key)`.
 
 ### 4.3 서버 (`user_docs`)
@@ -115,7 +115,7 @@ CREATE TABLE user_docs (
 ### 4.5 동기화 엔진 (`docs/sync.ts`)
 - 계정 저장에 동의한 회원만 돈다. 동의 하나가 exam·session·note를 덮는다. story는 그 기능에서 따로 안내한다.
 - 시점: 홈 진입, 로그인 직후, 기록 저장 직후(같은 기록은 1초 몰아서 한 번).
-- 보내기: 로컬 `updatedAt` > `syncedAt`이면 보내고, 올리지 않은 녹음을 올린다(저장소가 없으면 503을 받고 건너뛴다).
+- 보내기: 로컬 `updatedAt` > `pushedVersion`이면 보내고, 올리지 않은 녹음을 올린다(저장소가 없으면 503을 받고 건너뛴다).
 - 받기: 목록은 요약만 받는다. 내용은 열 때 받고 로컬에 사본을 둔다. 녹음은 재생할 때 받는다.
 
 ### 4.6 정책 (`docs/policy.ts`)
@@ -172,7 +172,7 @@ CREATE TABLE user_docs (
 
 ## 9. 오류 모양
 
-모든 API 오류: `{ error: string, kind?: "rate" | "daily" | "quota" | "auth" | "invalid", retryAfter?: number, remaining?: number }`. 브라우저는 `lib/http.ts`의 `request()`로 부르고 이 모양을 해석한다. 서버는 공용 `apiError()`를 쓴다.
+모든 API 오류: `{ error: string, kind?: "rate" | "daily" | "quota" | "auth" | "invalid" | "conflict", retryAfter?: number, remaining?: number, resetAt?: string }`. `conflict`는 4.4의 409에 쓴다. 브라우저는 `lib/http.ts`의 `request()`로 부르고 이 모양을 해석한다. 서버는 공용 `apiError()`를 쓴다.
 
 ## 10. 검증
 

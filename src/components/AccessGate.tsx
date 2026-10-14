@@ -13,6 +13,8 @@ export type Config = {
   auth: boolean;
   user: { email: string; nickname: string; createdAt: string; recordsConsent: boolean } | null;
   models: { id: string; available: boolean }[];
+  /** Which storage the server has. Without a blob store, recordings stay in the browser. */
+  storage?: { database: boolean; blob: boolean };
 };
 
 const ConfigContext = createContext<Config | null>(null);

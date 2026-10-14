@@ -16,7 +16,13 @@ import { ApiError } from "@/lib/http";
 
 type RemoteEntry = { id: string; updatedAt: number; deletedAt?: number };
 
-export function planSync(local: Doc[], remote: RemoteEntry[], sync: Record<string, SyncState | undefined>): { push: string[]; dropLocal: string[] } {
+/** `audio: false` when the server has no recording store: pending recordings alone do not make a push. */
+export function planSync(
+  local: Doc[],
+  remote: RemoteEntry[],
+  sync: Record<string, SyncState | undefined>,
+  { audio = true }: { audio?: boolean } = {},
+): { push: string[]; dropLocal: string[] } {
   const remoteById = new Map(remote.map((r) => [r.id, r]));
   const push: string[] = [];
   const dropLocal: string[] = [];
@@ -29,7 +35,7 @@ export function planSync(local: Doc[], remote: RemoteEntry[], sync: Record<strin
       else dropLocal.push(d.id);
     } else if (r?.deletedAt && d.updatedAt <= r.deletedAt) {
       dropLocal.push(d.id);
-    } else if (!r || r.deletedAt || s?.pushedVersion === undefined || d.updatedAt > s.pushedVersion || pendingAudio(d, s)) {
+    } else if (!r || r.deletedAt || s?.pushedVersion === undefined || d.updatedAt > s.pushedVersion || (audio && pendingAudio(d, s))) {
       push.push(d.id);
     }
   }
@@ -74,8 +80,11 @@ async function adopt(kind: DocKind, local: Doc, server: Doc, state: SyncState): 
   return { ...state, pushedVersion: server.updatedAt, syncedAt: Date.now() };
 }
 
-/** Sends one document and its missing recordings. Never throws; failures land in `error`. */
-export async function pushDoc(kind: DocKind, id: string): Promise<SyncState> {
+/**
+ * Sends one document and its missing recordings (`audio: false` skips recordings). Never throws; failures
+ * land in `error`. `uploaded` lists the recordings that are settled: in the account, or with nothing here to send.
+ */
+export async function pushDoc(kind: DocKind, id: string, { audio = true }: { audio?: boolean } = {}): Promise<SyncState> {
   const local = await localDocs.get(kind, id);
   const before = (await localDocs.getSync(kind, id)) ?? { uploaded: [] };
   if (!local) return before;
@@ -99,11 +108,14 @@ export async function pushDoc(kind: DocKind, id: string): Promise<SyncState> {
         return state;
       }
     }
-    for (const key of KINDS[kind].audioKeys(local.data)) {
+    for (const key of audio ? KINDS[kind].audioKeys(local.data) : []) {
       if (state.uploaded.includes(key)) continue;
       const blob = await getAudio(`${id}:${key}`).catch(() => undefined);
-      // Nothing recorded, or the recording is only in the account already.
-      if (!blob?.size) continue;
+      // Nothing recorded (an answer cut off before it began), or no copy in this browser: nothing to send, ever.
+      if (!blob?.size) {
+        state.uploaded.push(key);
+        continue;
+      }
       try {
         await accountDocs.putAudio(kind, id, key, blob);
       } catch (e) {
@@ -125,26 +137,33 @@ export async function pushDoc(kind: DocKind, id: string): Promise<SyncState> {
  * Compares this browser with the account: applies the account's deletions here and returns the account's
  * summaries (for lists) and the documents to push. The caller pushes them, so it can show progress.
  */
-export async function syncKind(kind: DocKind): Promise<{ remote: RemoteSummary[]; push: string[] }> {
+export async function syncKind(kind: DocKind, { audio = true }: { audio?: boolean } = {}): Promise<{ remote: RemoteSummary[]; push: string[] }> {
   const [remote, local] = await Promise.all([accountDocs.list(kind), localDocs.list(kind, { withDeleted: true })]);
   const sync: Record<string, SyncState | undefined> = {};
   await Promise.all(local.map(async (d) => (sync[d.id] = await localDocs.getSync(kind, d.id))));
-  const plan = planSync(local, remote, sync);
+  const plan = planSync(local, remote, sync, { audio });
   for (const id of plan.dropLocal) await dropLocalCopy(kind, id, local.find((d) => d.id === id)?.data);
+  // The account has no live copy (storage turned off and on elsewhere, or deleted there before a newer edit
+  // here): forget what was sent, so the record and its recordings go up again.
+  const live = new Set(remote.filter((r) => !r.deletedAt).map((r) => r.id));
+  for (const id of plan.push) {
+    const d = local.find((x) => x.id === id);
+    if (d && !d.deletedAt && !live.has(id)) await localDocs.setSync(kind, id, { uploaded: [] });
+  }
   return { remote: remote.filter((r) => !r.deletedAt), push: plan.push };
 }
 
 const timers = new Map<string, ReturnType<typeof setTimeout>>();
 
 /** Pushes a document a second after its last save, so a burst of saves sends once. */
-export function scheduleSync(kind: DocKind, id: string, onDone?: (s: SyncState) => void): void {
+export function scheduleSync(kind: DocKind, id: string, onDone?: (s: SyncState) => void, opts: { audio?: boolean } = {}): void {
   const k = `${kind}:${id}`;
   clearTimeout(timers.get(k));
   timers.set(
     k,
     setTimeout(() => {
       timers.delete(k);
-      void pushDoc(kind, id).then(onDone);
+      void pushDoc(kind, id, opts).then(onDone);
     }, 1000),
   );
 }

@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { putAudio } from "@/lib/client/db";
 import type { Doc } from "@/lib/docs/kinds";
 import { localDocs } from "@/lib/docs/local";
-import { planSync, pushDoc } from "@/lib/docs/sync";
+import { planSync, pushDoc, syncKind } from "@/lib/docs/sync";
 import type { ExamResult } from "@/lib/exam/result";
 
 function exam(id: string, extra: Partial<ExamResult> = {}): ExamResult {
@@ -147,5 +147,37 @@ describe("pushDoc", () => {
     const state = await pushDoc("exam", "ex5");
     expect(state.error).toBe("잠시 후 다시 시도하세요.");
     expect(state.pushedVersion).toBeUndefined();
+  });
+});
+
+describe("fixes from review", () => {
+  it("a doc the account lost is sent again with its recordings", async () => {
+    await localDocs.put("exam", "lost01", exam("lost01"), { updatedAt: 1500 });
+    await putAudio("lost01:1", new Blob(["sound"], { type: "audio/webm" }));
+    await localDocs.setSync("exam", "lost01", { pushedVersion: 1500, uploaded: ["1"], syncedAt: 1 });
+    const calls = fakeFetch([(c) => (c.url.startsWith("/api/me/docs?") ? Response.json({ docs: [] }) : undefined)]);
+    const { push } = await syncKind("exam");
+    expect(push).toEqual(["lost01"]);
+    await pushDoc("exam", "lost01");
+    expect(calls.filter((c) => c.method === "PUT" && !c.url.includes("/audio/"))).toHaveLength(1);
+    expect(calls.filter((c) => c.url.endsWith("/lost01/audio/1"))).toHaveLength(1);
+  });
+
+  it("without a recording store, recordings are neither planned nor sent", async () => {
+    await localDocs.put("exam", "nob01", exam("nob01"), { updatedAt: 1500 });
+    await putAudio("nob01:1", new Blob(["sound"], { type: "audio/webm" }));
+    await localDocs.setSync("exam", "nob01", { pushedVersion: 1500, uploaded: [] });
+    const calls = fakeFetch([(c) => (c.url.startsWith("/api/me/docs?") ? Response.json({ docs: [{ id: "nob01", updatedAt: 1500, summary: {} }] }) : undefined)]);
+    expect((await syncKind("exam", { audio: false })).push).toEqual([]);
+    await pushDoc("exam", "nob01", { audio: false });
+    expect(calls.filter((c) => c.url.includes("/audio/"))).toHaveLength(0);
+  });
+
+  it("an answer with no recording here does not stay pending", async () => {
+    await localDocs.put("exam", "empty1", exam("empty1"), { updatedAt: 1500 });
+    await putAudio("empty1:1", new Blob([]));
+    fakeFetch([(c) => (c.url.startsWith("/api/me/docs?") ? Response.json({ docs: [{ id: "empty1", updatedAt: 1500, summary: {} }] }) : undefined)]);
+    await pushDoc("exam", "empty1");
+    expect((await syncKind("exam")).push).toEqual([]);
   });
 });

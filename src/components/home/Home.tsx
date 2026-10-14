@@ -175,6 +175,7 @@ export function Home() {
   const [remote, setRemote] = useState<RemoteSummary[]>([]);
   const [uploading, setUploading] = useState(0);
   const keep = syncEnabled(config.user);
+  const audio = config.storage?.blob !== false;
 
   const loadLocal = () =>
     localDocs
@@ -194,12 +195,12 @@ export function Home() {
     syncing.current = true;
     void (async () => {
       try {
-        const { remote, push } = await syncKind("exam");
+        const { remote, push } = await syncKind("exam", { audio });
         setRemote(remote);
         await loadLocal();
         for (let i = 0; i < push.length; i++) {
           setUploading(push.length - i);
-          await pushDoc("exam", push[i]);
+          await pushDoc("exam", push[i], { audio });
         }
         setUploading(0);
         if (push.length) {

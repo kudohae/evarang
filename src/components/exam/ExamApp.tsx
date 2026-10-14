@@ -193,9 +193,9 @@ export function ExamApp() {
       ...(consent.research ? { research: { secret: newSecret(), uploaded: [] } } : {}),
     };
     await localDocs.put("exam", result.id, result);
-    if (syncEnabled(config.user)) scheduleSync("exam", result.id);
+    if (syncEnabled(config.user)) scheduleSync("exam", result.id, undefined, { audio: config.storage?.blob !== false });
     router.replace(`/results/${result.id}`);
-  }, [adjustment, answers, config.user, consent.research, finalLevel, questions, router, startLevel, survey, timedOut]);
+  }, [adjustment, answers, config.storage, config.user, consent.research, finalLevel, questions, router, startLevel, survey, timedOut]);
 
   useEffect(() => {
     if (settled && failed.length === 0 && !noticeOpen) void save();

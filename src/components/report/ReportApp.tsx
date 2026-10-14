@@ -39,7 +39,7 @@ export function ReportApp({ id }: { id: string }) {
     latest.current = next;
     setResult(next);
     await localDocs.put("exam", next.id, next, { updatedAt });
-    if (!localOnly && keepInAccount) scheduleSync("exam", next.id, (s) => void adoptNewer(s.pushedVersion));
+    if (!localOnly && keepInAccount) scheduleSync("exam", next.id, (s) => void adoptNewer(s.pushedVersion), { audio: config.storage?.blob !== false });
   };
 
   // The account had a newer copy (edited on another device) and it replaced ours: show it and build on it.

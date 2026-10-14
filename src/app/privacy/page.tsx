@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Wordmark } from "@/components/ui";
+import { AppShell } from "@/components/AppShell";
 import { CONSENT_VERSION } from "@/lib/exam/result";
 
 export const metadata: Metadata = { title: "개인정보 처리방침 — 에바랑" };
@@ -14,10 +14,7 @@ function H({ children }: { children: React.ReactNode }) {
 
 export default function PrivacyPage() {
   return (
-    <div className="min-h-dvh">
-      <header className="mx-auto flex h-14 max-w-[1040px] items-center px-5">
-        <Wordmark />
-      </header>
+    <AppShell>
       <main className="mx-auto max-w-[720px] px-5 pb-28 pt-10 text-[15px] leading-[1.8] text-ink-2">
         <h1 className="text-[28px] font-bold tracking-[-0.02em] text-ink">개인정보 처리방침</h1>
         <p className="mt-3">
@@ -107,6 +104,6 @@ export default function PrivacyPage() {
         <H>8. 변경</H>
         <p className="mt-3">이 방침이 바뀌면 시행 7일 전에 이 페이지에 알립니다.</p>
       </main>
-    </div>
+    </AppShell>
   );
 }

@@ -23,6 +23,11 @@ export function useReloadConfig() {
   return useContext(ReloadContext);
 }
 
+/** The config, or null on pages outside AccessGate (e.g. the privacy policy). */
+export function useOptionalConfig(): Config | null {
+  return useContext(ConfigContext);
+}
+
 export function useConfig(): Config {
   const c = useContext(ConfigContext);
   if (!c) throw new Error("useConfig outside AccessGate");

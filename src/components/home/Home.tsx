@@ -3,12 +3,14 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { useConfig, useReloadConfig } from "@/components/AccessGate";
-import { Button, Icon, Spinner, Wordmark } from "@/components/ui";
+import { AppShell } from "@/components/AppShell";
+import { Button, Icon, Spinner } from "@/components/ui";
 import { accountDocs, type RemoteSummary } from "@/lib/docs/account";
 import { localDocs } from "@/lib/docs/local";
 import { syncEnabled } from "@/lib/docs/policy";
 import { pushDoc, syncKind } from "@/lib/docs/sync";
 import { latestEvaluation, type ExamResult } from "@/lib/exam/result";
+import { FEATURES } from "@/lib/features";
 import { modelLabel } from "@/lib/models";
 
 const DIFFERENCES = [
@@ -54,69 +56,53 @@ function Soon() {
   return <span className="shrink-0 text-[13px] text-ink-3">준비 중</span>;
 }
 
-/** What the site offers. Only the mock test is open; the rest are listed so the plan is visible, not clickable. */
+/** What the site offers, from the feature list. Open features link; the rest are listed so the plan is visible. */
 function Menu() {
   const idle = "flex items-center gap-5 py-5";
   return (
     <nav aria-label="메뉴" className="mt-12">
       <ul className="border-t border-line">
-        <li className="border-b border-line">
-          <Link href="/test" className={`group ${idle}`}>
-            <span className="min-w-0 flex-1">
-              <span className="block text-[18px] font-semibold tracking-[-0.01em]">모의고사</span>
-              <span className="mt-1 block text-[14px] leading-relaxed text-ink-2">실제 순서 그대로 12~15문항. 끝나면 예상 등급과 문항별 첨삭을 받습니다.</span>
-            </span>
-            <span className="hidden shrink-0 text-[13px] text-ink-3 sm:block">약 60분 · 마이크 필요</span>
-            <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-primary text-primary-ink transition-transform duration-150 group-hover:translate-x-0.5">
-              <Icon name="arrow" className="size-4" />
-            </span>
-          </Link>
-        </li>
-        <li className="border-b border-line" aria-disabled="true">
-          <div className={idle}>
-            <span className="min-w-0 flex-1">
-              <span className="block text-[18px] font-semibold tracking-[-0.01em] text-ink-3">첨삭노트</span>
-              <span className="mt-1 block text-[14px] leading-relaxed text-ink-3">모의고사에서 고친 표현을 모아, 소리 내어 다시 말하며 복습합니다.</span>
-            </span>
-            <Soon />
-          </div>
-        </li>
-        <li className="border-b border-line py-5" aria-disabled="true">
-          <span className="block text-[18px] font-semibold tracking-[-0.01em] text-ink-3">맞춤형 연습</span>
-          <span className="mt-1 block text-[14px] leading-relaxed text-ink-3">약한 곳만 골라 한 문항씩 연습합니다.</span>
-          <ul className="mt-3 flex flex-col gap-2 border-l-2 border-line pl-4">
-            <li className="flex items-baseline gap-5">
-              <span className="min-w-0 flex-1 text-[15px] text-ink-3">
-                <span className="font-semibold">문항별</span> · 묘사, 루틴, 과거 경험, 롤플레이, 비교, 사회 이슈
-              </span>
-              <Soon />
+        {FEATURES.map((f) =>
+          f.status === "open" ? (
+            <li key={f.id} className="border-b border-line">
+              <Link href={f.href} className={`group ${idle}`}>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-[18px] font-semibold tracking-[-0.01em]">{f.label}</span>
+                  <span className="mt-1 block text-[14px] leading-relaxed text-ink-2">{f.description}</span>
+                </span>
+                {f.meta && <span className="hidden shrink-0 text-[13px] text-ink-3 sm:block">{f.meta}</span>}
+                <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-primary text-primary-ink transition-transform duration-150 group-hover:translate-x-0.5">
+                  <Icon name="arrow" className="size-4" />
+                </span>
+              </Link>
             </li>
-            <li className="flex items-baseline gap-5">
-              <span className="min-w-0 flex-1 text-[15px] text-ink-3">
-                <span className="font-semibold">주제별</span> · 서베이에서 고른 주제와 돌발 주제
-              </span>
-              <Soon />
+          ) : f.children ? (
+            <li key={f.id} className="border-b border-line py-5" aria-disabled="true">
+              <span className="block text-[18px] font-semibold tracking-[-0.01em] text-ink-3">{f.label}</span>
+              <span className="mt-1 block text-[14px] leading-relaxed text-ink-3">{f.description}</span>
+              <ul className="mt-3 flex flex-col gap-2 border-l-2 border-line pl-4">
+                {f.children.map((c) => (
+                  <li key={c.id} className="flex items-baseline gap-5">
+                    <span className="min-w-0 flex-1 text-[15px] text-ink-3">
+                      <span className="font-semibold">{c.label}</span> · {c.description}
+                    </span>
+                    <Soon />
+                  </li>
+                ))}
+              </ul>
             </li>
-          </ul>
-        </li>
-        <li className="border-b border-line" aria-disabled="true">
-          <div className={idle}>
-            <span className="min-w-0 flex-1">
-              <span className="block text-[18px] font-semibold tracking-[-0.01em] text-ink-3">문장 구조화 연습</span>
-              <span className="mt-1 block text-[14px] leading-relaxed text-ink-3">바로 답하기, 이유, 예시, 내 생각. 한 단계씩 천천히 쌓아 말합니다.</span>
-            </span>
-            <Soon />
-          </div>
-        </li>
-        <li className="border-b border-line" aria-disabled="true">
-          <div className={idle}>
-            <span className="min-w-0 flex-1">
-              <span className="block text-[18px] font-semibold tracking-[-0.01em] text-ink-3">스토리뱅크</span>
-              <span className="mt-1 block text-[14px] leading-relaxed text-ink-3">내 경험으로 여러 주제에 돌려 쓸 이야기를 만들어 둡니다.</span>
-            </span>
-            <Soon />
-          </div>
-        </li>
+          ) : (
+            <li key={f.id} className="border-b border-line" aria-disabled="true">
+              <div className={idle}>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-[18px] font-semibold tracking-[-0.01em] text-ink-3">{f.label}</span>
+                  <span className="mt-1 block text-[14px] leading-relaxed text-ink-3">{f.description}</span>
+                </span>
+                <Soon />
+              </div>
+            </li>
+          ),
+        )}
       </ul>
     </nav>
   );
@@ -232,21 +218,7 @@ export function Home() {
   const rows = [...local, ...remote.filter((e) => !local.some((l) => l.id === e.id)).map(fromAccount)].sort((a, b) => b.createdAt - a.createdAt);
 
   return (
-    <div className="min-h-dvh">
-      <header className="mx-auto flex h-14 max-w-[1040px] items-center justify-between px-5">
-        <Wordmark />
-        {config.auth &&
-          (config.user ? (
-            <Link href="/account" className="text-[14px] font-medium text-ink-2 hover:text-ink">
-              {config.user.nickname}
-            </Link>
-          ) : (
-            <Link href="/login" className="text-[14px] font-medium text-ink-2 hover:text-ink">
-              로그인
-            </Link>
-          ))}
-      </header>
-
+    <AppShell>
       <main className="mx-auto max-w-[720px] px-5 pb-24">
         <section className="rise pt-16 md:pt-24">
           <h1 className="text-[34px] font-bold leading-[1.22] tracking-[-0.03em] md:text-[44px]">
@@ -327,6 +299,6 @@ export function Home() {
           </p>
         </footer>
       </main>
-    </div>
+    </AppShell>
   );
 }

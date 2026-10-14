@@ -2,16 +2,13 @@
 
 import Link from "next/link";
 import { useId, useState, type ComponentProps, type ReactNode } from "react";
-import { Wordmark } from "@/components/ui";
+import { AppShell } from "@/components/AppShell";
 
 export function AuthShell({ children, wide = false }: { children: ReactNode; wide?: boolean }) {
   return (
-    <div className="flex min-h-dvh flex-col">
-      <header className="mx-auto flex h-14 w-full max-w-[1040px] items-center px-5">
-        <Wordmark />
-      </header>
+    <AppShell>
       <main className={`rise mx-auto w-full flex-1 px-5 pb-24 pt-10 md:pt-16 ${wide ? "max-w-[560px]" : "max-w-[400px]"}`}>{children}</main>
-    </div>
+    </AppShell>
   );
 }
 

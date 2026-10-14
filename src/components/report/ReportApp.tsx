@@ -1,11 +1,11 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { useConfig } from "@/components/AccessGate";
 import { Report } from "@/components/report/Report";
 import { WaitingRoom } from "@/components/report/WaitingRoom";
-import { Button, Icon, Spinner, Wordmark } from "@/components/ui";
+import { AppShell } from "@/components/AppShell";
+import { Button, Icon, Spinner } from "@/components/ui";
 import { evaluate, type Progress } from "@/lib/client/evaluate";
 import { localDocs } from "@/lib/docs/local";
 import { syncEnabled } from "@/lib/docs/policy";
@@ -16,22 +16,6 @@ import { FallbackNotice } from "@/components/FallbackNotice";
 import type { FallbackReason, Grade } from "@/lib/types";
 import type { ExamResult } from "@/lib/exam/result";
 import { MODELS, modelLabel } from "@/lib/models";
-
-function Shell({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="min-h-dvh">
-      <header className="no-print border-b border-line">
-        <div className="mx-auto flex h-14 max-w-[1040px] items-center justify-between px-5">
-          <Wordmark />
-          <Link href="/" className="text-[14px] text-ink-2 hover:text-ink">
-            처음으로
-          </Link>
-        </div>
-      </header>
-      {children}
-    </div>
-  );
-}
 
 export function ReportApp({ id }: { id: string }) {
   const config = useConfig();
@@ -159,17 +143,17 @@ export function ReportApp({ id }: { id: string }) {
 
   if (result === undefined) {
     return (
-      <Shell>
+      <AppShell>
         <div className="flex justify-center pt-32 text-ink-3">
           <Spinner className="size-5" />
         </div>
-      </Shell>
+      </AppShell>
     );
   }
 
   if (result === null) {
     return (
-      <Shell>
+      <AppShell>
         <main className="mx-auto max-w-[560px] px-5 pt-24">
           <h1 className="text-[22px] font-bold">결과를 찾을 수 없습니다</h1>
           <p className="mt-2 text-[15px] leading-relaxed text-ink-2">
@@ -182,13 +166,13 @@ export function ReportApp({ id }: { id: string }) {
                   : "시험 기록은 응시한 브라우저에만 저장됩니다. 다른 기기나 브라우저에서는 열리지 않습니다."}
           </p>
         </main>
-      </Shell>
+      </AppShell>
     );
   }
 
   if (waiting) {
     return (
-      <Shell>
+      <AppShell>
         <WaitingRoom
           result={result}
           progress={waiting.progress}
@@ -200,7 +184,7 @@ export function ReportApp({ id }: { id: string }) {
             window.scrollTo(0, 0);
           }}
         />
-      </Shell>
+      </AppShell>
     );
   }
 
@@ -209,7 +193,7 @@ export function ReportApp({ id }: { id: string }) {
   if (!evaluation) {
     const empty = transcribed > 0 && result.answers.every((a) => !a.transcript?.text.trim());
     return (
-      <Shell>
+      <AppShell>
         <main className="rise mx-auto max-w-[640px] px-5 pb-24 pt-14">
           <h1 className="text-[26px] font-bold tracking-[-0.02em]">평가 전</h1>
           <p className="mt-3 text-[15px] leading-relaxed text-ink-2">답변 {transcribed}개를 받아썼습니다.</p>
@@ -234,7 +218,7 @@ export function ReportApp({ id }: { id: string }) {
           </div>
         </main>
         {notice && <FallbackNotice reason={notice} during="after" onClose={() => setNotice(null)} />}
-      </Shell>
+      </AppShell>
     );
   }
 
@@ -258,7 +242,7 @@ export function ReportApp({ id }: { id: string }) {
     ) : null;
 
   return (
-    <Shell>
+    <AppShell>
       <Report
         result={result}
         evaluation={evaluation}
@@ -271,6 +255,6 @@ export function ReportApp({ id }: { id: string }) {
         onDeleteResearch={result.consent?.research ? removeResearch : undefined}
       />
       {notice && <FallbackNotice reason={notice} during="after" onClose={() => setNotice(null)} />}
-    </Shell>
+    </AppShell>
   );
 }

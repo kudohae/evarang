@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
-import { neon, type NeonQueryFunction } from "@neondatabase/serverless";
+import type { NeonQueryFunction } from "@neondatabase/serverless";
 import { del } from "@vercel/blob";
+import { databaseUrl, neonClient } from "@/lib/server/sql";
 
 /*
   Research storage for candidates who opted in.
@@ -14,19 +15,13 @@ export const RETENTION_DAYS = 730;
 let client: NeonQueryFunction<false, false> | null = null;
 let schema: Promise<unknown> | null = null;
 
-function databaseUrl(): string | undefined {
-  return process.env.DATABASE_URL || process.env.POSTGRES_URL;
-}
-
 /** Newer Vercel projects connect Blob with BLOB_STORE_ID and authenticate through OIDC; older ones get a read-write token. */
 export function storageConfigured(): boolean {
   return Boolean(databaseUrl() && (process.env.BLOB_STORE_ID || process.env.BLOB_READ_WRITE_TOKEN));
 }
 
 export async function db(): Promise<NeonQueryFunction<false, false>> {
-  const url = databaseUrl();
-  if (!url) throw new Error("DATABASE_URL is not set");
-  client ??= neon(url);
+  client ??= neonClient();
   schema ??= client`
     CREATE TABLE IF NOT EXISTS exam_records (
       id               text PRIMARY KEY,

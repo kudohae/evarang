@@ -1,0 +1,215 @@
+"use client";
+
+import { useRouter } from "next/navigation";
+import { useEffect, useState, type ReactNode } from "react";
+import { AuthShell, Field, FormError, send, useSubmit } from "@/components/account/parts";
+import { useConfig, useReloadConfig } from "@/components/AccessGate";
+import { Button, Spinner } from "@/components/ui";
+
+function Section({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <section className="border-t border-line pt-8">
+      <h2 className="text-[17px] font-semibold">{title}</h2>
+      <div className="mt-5 flex flex-col gap-4">{children}</div>
+    </section>
+  );
+}
+
+function Saved({ show }: { show: boolean }) {
+  return show ? <span className="text-[14px] text-good">저장했습니다</span> : null;
+}
+
+export function AccountPage() {
+  const config = useConfig();
+  const reload = useReloadConfig();
+  const router = useRouter();
+  const user = config.user;
+
+  useEffect(() => {
+    if (config.auth && !user) router.replace("/login?next=/account");
+  }, [config.auth, user, router]);
+
+  const [nickname, setNickname] = useState(user?.nickname ?? "");
+  const [email, setEmail] = useState(user?.email ?? "");
+  const [emailPassword, setEmailPassword] = useState("");
+  const [current, setCurrent] = useState("");
+  const [next, setNext] = useState("");
+  const [confirm, setConfirm] = useState("");
+  const [leavePassword, setLeavePassword] = useState("");
+  const [saved, setSaved] = useState<"" | "nickname" | "email" | "password">("");
+
+  const profile = useSubmit();
+  const mail = useSubmit();
+  const pass = useSubmit();
+  const leave = useSubmit();
+  const out = useSubmit();
+
+  if (!config.auth) {
+    return (
+      <AuthShell>
+        <h1 className="text-[26px] font-bold tracking-[-0.02em]">내 정보</h1>
+        <p className="mt-3 text-[15px] text-ink-2">회원 기능이 아직 설정되지 않았습니다.</p>
+      </AuthShell>
+    );
+  }
+  if (!user) {
+    return (
+      <AuthShell>
+        <div className="flex justify-center pt-16 text-ink-3">
+          <Spinner className="size-5" />
+        </div>
+      </AuthShell>
+    );
+  }
+
+  const emailChanged = email.trim().toLowerCase() !== user.email;
+  const flash = (what: typeof saved) => {
+    setSaved(what);
+    window.setTimeout(() => setSaved((s) => (s === what ? "" : s)), 2500);
+  };
+
+  return (
+    <AuthShell wide>
+      <h1 className="text-[26px] font-bold tracking-[-0.02em]">내 정보</h1>
+      <p className="mt-2 text-[15px] text-ink-2">
+        {new Date(user.createdAt).toLocaleDateString("ko-KR", { year: "numeric", month: "long", day: "numeric" })}에 가입했습니다.
+      </p>
+
+      <div className="mt-10 flex flex-col gap-10">
+        <Section title="닉네임">
+          <form
+            className="flex flex-col gap-4"
+            onSubmit={(e) => {
+              e.preventDefault();
+              void profile.run(async () => {
+                await send("/api/account", "PATCH", { nickname });
+                await reload();
+                flash("nickname");
+              });
+            }}
+          >
+            <Field label="닉네임" maxLength={20} required value={nickname} onChange={(e) => setNickname(e.target.value)} />
+            <FormError>{profile.error}</FormError>
+            <div className="flex items-center gap-4">
+              <Button type="submit" variant="secondary" disabled={profile.busy || !nickname.trim() || nickname.trim() === user.nickname}>
+                {profile.busy ? <Spinner /> : "저장"}
+              </Button>
+              <Saved show={saved === "nickname"} />
+            </div>
+          </form>
+        </Section>
+
+        <Section title="이메일">
+          <form
+            className="flex flex-col gap-4"
+            onSubmit={(e) => {
+              e.preventDefault();
+              void mail.run(async () => {
+                await send("/api/account", "PATCH", { email, currentPassword: emailPassword });
+                setEmailPassword("");
+                await reload();
+                flash("email");
+              });
+            }}
+          >
+            <Field label="이메일" type="email" autoComplete="email" required value={email} onChange={(e) => setEmail(e.target.value)} hint="로그인할 때 쓰는 주소입니다." />
+            {emailChanged && (
+              <Field label="현재 비밀번호" type="password" autoComplete="current-password" required value={emailPassword} onChange={(e) => setEmailPassword(e.target.value)} />
+            )}
+            <FormError>{mail.error}</FormError>
+            <div className="flex items-center gap-4">
+              <Button type="submit" variant="secondary" disabled={mail.busy || !emailChanged || !emailPassword}>
+                {mail.busy ? <Spinner /> : "이메일 변경"}
+              </Button>
+              <Saved show={saved === "email"} />
+            </div>
+          </form>
+        </Section>
+
+        <Section title="비밀번호">
+          <form
+            className="flex flex-col gap-4"
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (next !== confirm) return pass.setError("새 비밀번호 확인이 일치하지 않습니다.");
+              void pass.run(async () => {
+                await send("/api/account/password", "POST", { currentPassword: current, newPassword: next });
+                setCurrent("");
+                setNext("");
+                setConfirm("");
+                flash("password");
+              });
+            }}
+          >
+            <Field label="현재 비밀번호" type="password" autoComplete="current-password" required value={current} onChange={(e) => setCurrent(e.target.value)} />
+            <Field label="새 비밀번호" type="password" autoComplete="new-password" required minLength={8} value={next} onChange={(e) => setNext(e.target.value)} hint="8자 이상. 바꾸면 다른 기기에서는 로그아웃됩니다." />
+            <Field
+              label="새 비밀번호 확인"
+              type="password"
+              autoComplete="new-password"
+              required
+              value={confirm}
+              onChange={(e) => setConfirm(e.target.value)}
+              hint={confirm && confirm !== next ? "새 비밀번호와 다릅니다." : undefined}
+            />
+            <FormError>{pass.error}</FormError>
+            <div className="flex items-center gap-4">
+              <Button type="submit" variant="secondary" disabled={pass.busy || !current || next.length < 8 || next !== confirm}>
+                {pass.busy ? <Spinner /> : "비밀번호 변경"}
+              </Button>
+              <Saved show={saved === "password"} />
+            </div>
+          </form>
+        </Section>
+
+        <Section title="로그아웃">
+          <div>
+            <Button
+              variant="secondary"
+              disabled={out.busy}
+              onClick={() =>
+                void out.run(async () => {
+                  await send("/api/auth/logout", "POST");
+                  // A full load: reloading the config first would bounce this page to the login screen.
+                  window.location.assign("/");
+                })
+              }
+            >
+              {out.busy ? <Spinner /> : "로그아웃"}
+            </Button>
+          </div>
+          <FormError>{out.error}</FormError>
+        </Section>
+
+        <Section title="회원 탈퇴">
+          <p className="text-[14px] leading-relaxed text-ink-2">
+            계정과 로그인 정보를 바로 삭제합니다. 되돌릴 수 없습니다. 이 브라우저에 저장된 시험 기록은 그대로 남고, 예측 개선용으로 저장한 기록은 각 보고서 아래에서 따로 삭제할 수 있습니다.
+          </p>
+          <form
+            className="flex flex-col gap-4"
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (!window.confirm("정말 탈퇴할까요? 계정을 되살릴 수 없습니다.")) return;
+              void leave.run(async () => {
+                await send("/api/account", "DELETE", { password: leavePassword });
+                window.location.assign("/");
+              });
+            }}
+          >
+            <Field label="비밀번호" type="password" autoComplete="current-password" required value={leavePassword} onChange={(e) => setLeavePassword(e.target.value)} />
+            <FormError>{leave.error}</FormError>
+            <div>
+              <button
+                type="submit"
+                disabled={leave.busy || !leavePassword}
+                className="inline-flex h-11 items-center gap-2 rounded-ctl border border-pen/40 px-5 text-[15px] font-semibold text-pen-ink transition-colors hover:bg-pen-soft disabled:cursor-not-allowed disabled:border-line disabled:text-ink-3 disabled:hover:bg-transparent"
+              >
+                {leave.busy ? <Spinner /> : "탈퇴하기"}
+              </button>
+            </div>
+          </form>
+        </Section>
+      </div>
+    </AuthShell>
+  );
+}

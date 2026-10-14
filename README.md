@@ -45,6 +45,7 @@ src/
     api/transcribe        녹음 → AssemblyAI (Universal-3.5 Pro, disfluencies: true)
     api/evaluate/*        문항별 첨삭(5문항씩 묶음), 종합 판정
     api/access            접근 코드 확인 → httpOnly 쿠키
+    api/auth, api/account 가입·로그인·로그아웃, 회원정보 수정·탈퇴 (lib/server/auth.ts)
     api/records           동의한 시험의 저장·녹음 업로드·삭제
     api/admin/*           관리자 화면용 목록, 기록, 녹음
     api/cron/purge        보유 기간이 지난 기록 삭제 (vercel.json)
@@ -59,6 +60,14 @@ src/
 ```
 
 녹음과 결과는 사용자의 브라우저(IndexedDB)에 저장됩니다. 서버에는 "예측 개선을 위한 저장"에 동의한 시험만 남습니다.
+
+## 회원
+
+- **가입·로그인:** 이메일과 비밀번호. `DATABASE_URL`만 있으면 켜집니다(Blob은 필요 없음). 화면은 `/signup`, `/login`, `/account`(닉네임·이메일·비밀번호 변경, 로그아웃, 탈퇴).
+- **저장:** Postgres의 `users`, `sessions`, `auth_attempts` 표(처음 요청 때 자동 생성). 비밀번호는 scrypt 해시로만, 세션은 쿠키 값의 SHA-256만 저장합니다. 세션은 30일, 비밀번호를 바꾸면 다른 기기의 세션은 모두 끊깁니다.
+- **막아둔 것:** 다른 사이트에서 보낸 요청(Origin 검사), 이메일당 15분에 로그인 10회·IP당 50회, IP당 1시간에 가입 10회.
+- **아직 없는 것:** 비밀번호 찾기(메일 발송 필요), 이메일 인증, 소셜 로그인, 휴대폰·본인 인증. 시험 기록은 아직 계정에 연결되지 않고 브라우저에만 있습니다.
+- **로컬 개발:** 로컬 Postgres를 쓰려면 Neon HTTP 프로토콜을 흉내 내는 프록시를 띄우고 `NEON_FETCH_ENDPOINT`에 주소를 넣습니다.
 
 ## 동의와 데이터 수집
 

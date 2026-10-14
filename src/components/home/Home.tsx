@@ -39,8 +39,18 @@ export function Home() {
 
   return (
     <div className="min-h-dvh">
-      <header className="mx-auto flex h-14 max-w-[1040px] items-center px-5">
+      <header className="mx-auto flex h-14 max-w-[1040px] items-center justify-between px-5">
         <Wordmark />
+        {config.auth &&
+          (config.user ? (
+            <Link href="/account" className="text-[14px] font-medium text-ink-2 hover:text-ink">
+              {config.user.nickname}
+            </Link>
+          ) : (
+            <Link href="/login" className="text-[14px] font-medium text-ink-2 hover:text-ink">
+              로그인
+            </Link>
+          ))}
       </header>
 
       <main className="mx-auto max-w-[720px] px-5 pb-24">

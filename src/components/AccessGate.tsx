@@ -9,10 +9,19 @@ export type Config = {
   stt: boolean;
   /** Server can store research records (database and blob store configured). */
   research: boolean;
+  /** Accounts are available (a database is configured). */
+  auth: boolean;
+  user: { email: string; nickname: string; createdAt: string } | null;
   models: { id: string; available: boolean }[];
 };
 
 const ConfigContext = createContext<Config | null>(null);
+const ReloadContext = createContext<() => Promise<void>>(async () => {});
+
+/** Re-reads the server config, e.g. after signing in or out. */
+export function useReloadConfig() {
+  return useContext(ReloadContext);
+}
 
 export function useConfig(): Config {
   const c = useContext(ConfigContext);
@@ -81,5 +90,9 @@ export function AccessGate({ children }: { children: ReactNode }) {
     );
   }
 
-  return <ConfigContext.Provider value={config}>{children}</ConfigContext.Provider>;
+  return (
+    <ReloadContext.Provider value={load}>
+      <ConfigContext.Provider value={config}>{children}</ConfigContext.Provider>
+    </ReloadContext.Provider>
+  );
 }

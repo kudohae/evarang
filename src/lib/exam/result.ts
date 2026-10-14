@@ -32,7 +32,7 @@ export type ExamResult = {
   research?: { secret: string; uploaded: number[]; syncedAt?: number; deleted?: boolean; error?: string };
 };
 
-export const CONSENT_VERSION = "2026-10-11";
+export const CONSENT_VERSION = "2026-10-14";
 
 export function latestEvaluation(r: ExamResult): Evaluation | undefined {
   return r.evaluations[r.evaluations.length - 1];

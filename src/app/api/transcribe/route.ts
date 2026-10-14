@@ -1,4 +1,5 @@
 import { AssemblyAI } from "assemblyai";
+import { apiError } from "@/lib/server/api-error";
 import { guard } from "@/lib/server/access";
 import { geminiSttConfigured, geminiTranscribe } from "@/lib/server/gemini-stt";
 import type { FallbackReason, TranscribeResponse } from "@/lib/types";
@@ -58,8 +59,8 @@ export async function POST(request: Request) {
   if (denied) return denied;
 
   const audio = Buffer.from(await request.arrayBuffer());
-  if (audio.length === 0) return Response.json({ error: "녹음 파일이 비어 있습니다." }, { status: 400 });
-  if (audio.length > MAX_BYTES) return Response.json({ error: "녹음 파일이 너무 큽니다." }, { status: 413 });
+  if (audio.length === 0) return apiError(400, "녹음 파일이 비어 있습니다.", { kind: "invalid" });
+  if (audio.length > MAX_BYTES) return apiError(413, "녹음 파일이 너무 큽니다.", { kind: "invalid" });
 
   try {
     return Response.json(await assembly(audio));
@@ -68,10 +69,7 @@ export async function POST(request: Request) {
     if (e.reason === "credits") skipPrimaryUntil = Date.now() + 10 * 60 * 1000;
     console.warn(`AssemblyAI failed (${e.reason}): ${e.message}`);
     if (!geminiSttConfigured()) {
-      return Response.json(
-        { error: e.reason === "credits" ? "음성인식 이용 한도를 모두 썼고, 보조 음성인식도 설정되어 있지 않습니다." : `음성인식에 실패했습니다: ${e.message.slice(0, 200)}` },
-        { status: 502 },
-      );
+      return apiError(502, e.reason === "credits" ? "음성인식 이용 한도를 모두 썼고, 보조 음성인식도 설정되어 있지 않습니다." : `음성인식에 실패했습니다: ${e.message.slice(0, 200)}`);
     }
     try {
       const text = await geminiTranscribe(audio, request.headers.get("content-type") ?? "audio/webm");
@@ -80,7 +78,7 @@ export async function POST(request: Request) {
       return Response.json(body);
     } catch (g) {
       const msg = g instanceof Error ? g.message : String(g);
-      return Response.json({ error: `음성인식과 보조 음성인식이 모두 실패했습니다: ${msg.slice(0, 200)}` }, { status: 502 });
+      return apiError(502, `음성인식과 보조 음성인식이 모두 실패했습니다: ${msg.slice(0, 200)}`);
     }
   }
 }

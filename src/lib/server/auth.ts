@@ -1,6 +1,7 @@
 import { createHash, randomBytes, scrypt as scryptCb, timingSafeEqual, type ScryptOptions } from "node:crypto";
 import type { NeonQueryFunction } from "@neondatabase/serverless";
 import { cookies, headers } from "next/headers";
+import { apiError } from "@/lib/server/api-error";
 import { databaseUrl, neonClient } from "@/lib/server/sql";
 
 /*
@@ -307,8 +308,8 @@ export async function handle(run: () => Promise<Response>, { read = false }: { r
     if (!read) await assertSameOrigin();
     return await run();
   } catch (e) {
-    if (e instanceof AuthError) return Response.json({ error: e.message }, { status: e.status });
+    if (e instanceof AuthError) return apiError(e.status, e.message, { kind: e.status === 401 || e.status === 403 ? "auth" : e.status === 429 ? "rate" : "invalid" });
     console.error("auth error:", e);
-    return Response.json({ error: "잠시 후 다시 시도하세요. 서버에서 오류가 났습니다." }, { status: 502 });
+    return apiError(502, "잠시 후 다시 시도하세요. 서버에서 오류가 났습니다.");
   }
 }

@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import type { NeonQueryFunction } from "@neondatabase/serverless";
 import { del } from "@vercel/blob";
+import { apiError } from "@/lib/server/api-error";
 import { databaseUrl, neonClient } from "@/lib/server/sql";
 
 /*
@@ -76,12 +77,12 @@ export async function purgeExpired(): Promise<number> {
 
 /** Runs a storage handler and turns database or blob failures into a readable 502 instead of a bare 500. */
 export async function withStore(run: () => Promise<Response>): Promise<Response> {
-  if (!storageConfigured()) return Response.json({ error: "저장소가 설정되지 않았습니다." }, { status: 503 });
+  if (!storageConfigured()) return apiError(503, "저장소가 설정되지 않았습니다.");
   try {
     return await run();
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     console.error("storage error:", e);
-    return Response.json({ error: `저장소에 연결하지 못했습니다: ${msg.slice(0, 200)}` }, { status: 502 });
+    return apiError(502, `저장소에 연결하지 못했습니다: ${msg.slice(0, 200)}`);
   }
 }

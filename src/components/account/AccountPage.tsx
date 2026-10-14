@@ -5,9 +5,9 @@ import { useEffect, useState, type ReactNode } from "react";
 import { AuthShell, Field, FormError, send, useSubmit } from "@/components/account/parts";
 import { useConfig, useReloadConfig } from "@/components/AccessGate";
 import { Button, Spinner } from "@/components/ui";
-import { listAccountExams, setRecordsConsent } from "@/lib/client/account-records";
-import { allResults, putResult } from "@/lib/client/db";
-import type { ExamResult } from "@/lib/exam/result";
+import { accountDocs } from "@/lib/docs/account";
+import { localDocs } from "@/lib/docs/local";
+import { syncEnabled } from "@/lib/docs/policy";
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
@@ -48,11 +48,11 @@ export function AccountPage() {
   const out = useSubmit();
   const records = useSubmit();
   const [stored, setStored] = useState<number | null>(null);
-  const keep = Boolean(user?.recordsConsent);
+  const keep = syncEnabled(user);
 
   useEffect(() => {
     if (!keep) return setStored(null);
-    void listAccountExams().then((l) => setStored(l.length), () => setStored(null));
+    void accountDocs.list("exam").then((l) => setStored(l.filter((d) => !d.deletedAt).length), () => setStored(null));
   }, [keep]);
 
   if (!config.auth) {
@@ -186,10 +186,9 @@ export function AccountPage() {
                   onClick={() => {
                     if (!window.confirm("저장을 끄면 계정에 저장한 시험 기록과 녹음을 모두 삭제합니다. 이 브라우저의 기록은 남습니다.")) return;
                     void records.run(async () => {
-                      await setRecordsConsent(false);
+                      await accountDocs.setRecordsConsent(false);
                       // Forget what was sent, so turning it on again uploads everything afresh.
-                      const local = await allResults<ExamResult>().catch(() => []);
-                      await Promise.all(local.filter((r) => r.account).map(({ account: _a, ...r }) => (void _a, putResult(r.id, r))));
+                      await localDocs.clearSync().catch(() => {});
                       await reload();
                     });
                   }}
@@ -209,7 +208,7 @@ export function AccountPage() {
                   disabled={records.busy}
                   onClick={() =>
                     void records.run(async () => {
-                      await setRecordsConsent(true);
+                      await accountDocs.setRecordsConsent(true);
                       await reload();
                     })
                   }

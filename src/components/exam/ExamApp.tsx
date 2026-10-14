@@ -15,6 +15,9 @@ import { EMPTY_SURVEY, Survey } from "@/components/exam/Survey";
 import { resolveVoice, useVoices, type Recording } from "@/lib/client/audio";
 import { putAudio } from "@/lib/client/db";
 import { localDocs } from "@/lib/docs/local";
+import { syncEnabled } from "@/lib/docs/policy";
+import { scheduleSync } from "@/lib/docs/sync";
+import { useConfig } from "@/components/AccessGate";
 import { SAMPLE_QUESTION } from "@/lib/content/levels";
 import { adjustLevel, composeSession1, composeSession2, questionCount } from "@/lib/exam/compose";
 import { CONSENT_VERSION, newId, type ExamResult } from "@/lib/exam/result";
@@ -57,6 +60,7 @@ function TestHeader({ number, total, deadline }: { number: number; total: number
 
 export function ExamApp() {
   const router = useRouter();
+  const config = useConfig();
   const voices = useVoices();
   const voice = useMemo(() => resolveVoice(voices), [voices]);
 
@@ -190,8 +194,9 @@ export function ExamApp() {
       ...(consent.research ? { research: { secret: newSecret(), uploaded: [] } } : {}),
     };
     await localDocs.put("exam", result.id, result);
+    if (syncEnabled(config.user)) scheduleSync("exam", result.id);
     router.replace(`/results/${result.id}`);
-  }, [adjustment, answers, consent.research, finalLevel, questions, router, startLevel, survey, timedOut]);
+  }, [adjustment, answers, config.user, consent.research, finalLevel, questions, router, startLevel, survey, timedOut]);
 
   useEffect(() => {
     if (settled && failed.length === 0 && !noticeOpen) void save();

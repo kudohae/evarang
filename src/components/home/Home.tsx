@@ -4,8 +4,10 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { useConfig, useReloadConfig } from "@/components/AccessGate";
 import { Button, Icon, Spinner, Wordmark } from "@/components/ui";
-import { accountSignature, listAccountExams, setRecordsConsent, syncToAccount, type AccountExam } from "@/lib/client/account-records";
-import { allResults, putResult } from "@/lib/client/db";
+import { accountDocs, type RemoteSummary } from "@/lib/docs/account";
+import { localDocs } from "@/lib/docs/local";
+import { syncEnabled } from "@/lib/docs/policy";
+import { pushDoc, syncKind } from "@/lib/docs/sync";
 import { latestEvaluation, type ExamResult } from "@/lib/exam/result";
 import { modelLabel } from "@/lib/models";
 
@@ -35,8 +37,17 @@ function fromLocal(r: ExamResult): Row {
   return { id: r.id, createdAt: r.createdAt, grade: ev?.overall?.grade ?? null, startLevel: r.startLevel, finalLevel: r.finalLevel, count: r.questions.length, model: ev?.modelId ?? null };
 }
 
-function fromAccount(e: AccountExam): Row {
-  return { id: e.id, createdAt: Date.parse(e.createdAt), grade: e.grade, startLevel: e.startLevel, finalLevel: e.finalLevel, count: e.questionCount, model: e.model };
+function fromAccount(e: RemoteSummary): Row {
+  const s = e.summary as { createdAt?: number | null; grade?: string | null; startLevel?: number | null; finalLevel?: number | null; questionCount?: number | null; model?: string | null };
+  return {
+    id: e.id,
+    createdAt: typeof s.createdAt === "number" ? s.createdAt : e.updatedAt,
+    grade: s.grade ?? null,
+    startLevel: s.startLevel ?? null,
+    finalLevel: s.finalLevel ?? null,
+    count: s.questionCount ?? null,
+    model: s.model ?? null,
+  };
 }
 
 function Soon() {
@@ -175,38 +186,47 @@ export function Home() {
   const config = useConfig();
   const reload = useReloadConfig();
   const [results, setResults] = useState<ExamResult[] | null>(null);
-  const [remote, setRemote] = useState<AccountExam[]>([]);
+  const [remote, setRemote] = useState<RemoteSummary[]>([]);
   const [uploading, setUploading] = useState(0);
-  const keep = Boolean(config.user?.recordsConsent);
+  const keep = syncEnabled(config.user);
+
+  const loadLocal = () =>
+    localDocs
+      .list<ExamResult>("exam")
+      .then((list) => setResults(list.flatMap((d) => (d.data ? [d.data] : [])).sort((a, b) => b.createdAt - a.createdAt)))
+      .catch(() => setResults([]));
 
   useEffect(() => {
-    void allResults<ExamResult>()
-      .then((list) => setResults(list.sort((a, b) => b.createdAt - a.createdAt)))
-      .catch(() => setResults([]));
+    void loadLocal();
   }, []);
 
+  // On arrival: take in the account's deletions, list its tests, then send what it is missing one at a time.
+  const syncing = useRef(false);
   useEffect(() => {
     if (!keep) return setRemote([]);
-    void listAccountExams().then(setRemote, () => setRemote([]));
-  }, [keep]);
-
-  // Tests in this browser that the account copy does not match yet go up one at a time.
-  const pushing = useRef(false);
-  useEffect(() => {
-    if (!keep || !results || pushing.current) return;
-    const pending = results.filter((r) => r.account?.signature !== accountSignature(r));
-    if (!pending.length) return;
-    pushing.current = true;
+    if (syncing.current) return;
+    syncing.current = true;
     void (async () => {
-      for (let i = 0; i < pending.length; i++) {
-        setUploading(pending.length - i);
-        const account = await syncToAccount(pending[i]);
-        await putResult(pending[i].id, { ...pending[i], account }).catch(() => {});
+      try {
+        const { remote, push } = await syncKind("exam");
+        setRemote(remote);
+        await loadLocal();
+        for (let i = 0; i < push.length; i++) {
+          setUploading(push.length - i);
+          await pushDoc("exam", push[i]);
+        }
+        setUploading(0);
+        if (push.length) {
+          await loadLocal();
+          setRemote((await accountDocs.list("exam").catch(() => [])).filter((d) => !d.deletedAt));
+        }
+      } catch {
+        setRemote([]);
+      } finally {
+        syncing.current = false;
       }
-      setUploading(0);
-      setRemote(await listAccountExams().catch(() => []));
     })();
-  }, [keep, results]);
+  }, [keep]);
 
   const local = (results ?? []).map(fromLocal);
   const rows = [...local, ...remote.filter((e) => !local.some((l) => l.id === e.id)).map(fromAccount)].sort((a, b) => b.createdAt - a.createdAt);
@@ -244,7 +264,7 @@ export function Home() {
         {config.user && !keep && (
           <RecordsPrompt
             onAgree={async () => {
-              await setRecordsConsent(true);
+              await accountDocs.setRecordsConsent(true);
               await reload();
             }}
           />

@@ -18,6 +18,10 @@ type Kind = {
   hasAudio: boolean;
   /** A small object for lists, so a list never loads whole documents. */
   summary(data: unknown): Record<string, unknown>;
+  /** Keys of the recordings the document refers to; the local copy is the audio entry `${id}:${key}`. */
+  audioKeys(data: unknown): string[];
+  /** Fields that stay in this browser and never go to the account. */
+  localFields: string[];
 };
 
 type ExamLike = {
@@ -44,6 +48,9 @@ export const KINDS: Record<DocKind, Kind> = {
         model: latest?.modelId ?? null,
       };
     },
+    audioKeys: (data) => ((data as { answers?: { number: number }[] } | null)?.answers ?? []).map((a) => String(a.number)),
+    // The research copy's secret proves ownership of the research record; it never leaves this browser.
+    localFields: ["research"],
   },
   session: {
     maxBytes: 900_000,
@@ -52,9 +59,12 @@ export const KINDS: Record<DocKind, Kind> = {
       const s = (data ?? {}) as { kind?: string; createdAt?: number; attempts?: unknown[] };
       return { kind: s.kind ?? null, createdAt: s.createdAt ?? null, attemptCount: s.attempts?.length ?? null };
     },
+    // Practice features decide their recording keys when they are built.
+    audioKeys: () => [],
+    localFields: [],
   },
-  note: { maxBytes: 50_000, hasAudio: false, summary: () => ({}) },
-  story: { maxBytes: 200_000, hasAudio: false, summary: () => ({}) },
+  note: { maxBytes: 50_000, hasAudio: false, summary: () => ({}), audioKeys: () => [], localFields: [] },
+  story: { maxBytes: 200_000, hasAudio: false, summary: () => ({}), audioKeys: () => [], localFields: [] },
 };
 
 export function isDocKind(k: string): k is DocKind {

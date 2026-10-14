@@ -1,6 +1,6 @@
 "use client";
 
-import { loadRecording } from "@/lib/client/account-records";
+import { loadRecording } from "@/lib/docs/sync";
 import type { ExamResult } from "@/lib/exam/result";
 
 export function newSecret(): string {

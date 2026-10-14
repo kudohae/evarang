@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Icon } from "@/components/ui";
 import { AnnotatedTranscript } from "@/components/report/Transcript";
-import { loadRecording } from "@/lib/client/account-records";
+import { loadRecording } from "@/lib/docs/sync";
 import { resolveVoice, speak, useVoices, type Speech } from "@/lib/client/audio";
 import { TYPE_LABEL } from "@/lib/exam/compose";
 import type { QuestionFeedback } from "@/lib/feedback/schema";

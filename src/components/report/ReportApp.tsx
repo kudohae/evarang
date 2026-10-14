@@ -8,7 +8,8 @@ import { WaitingRoom } from "@/components/report/WaitingRoom";
 import { Button, Icon, Spinner, Wordmark } from "@/components/ui";
 import { evaluate, type Progress } from "@/lib/client/evaluate";
 import { localDocs } from "@/lib/docs/local";
-import { accountSignature, loadFromAccount, loadRecording, syncToAccount } from "@/lib/client/account-records";
+import { syncEnabled } from "@/lib/docs/policy";
+import { loadDoc, loadRecording, scheduleSync } from "@/lib/docs/sync";
 import { transcribeBlob } from "@/lib/client/transcribe";
 import { deleteResearch, researchSignature, syncResearch, wantsResearch } from "@/lib/client/research";
 import { FallbackNotice } from "@/components/FallbackNotice";
@@ -44,23 +45,33 @@ export function ReportApp({ id }: { id: string }) {
 
   // The latest saved result. Writes that finish later (evaluation, grade answer) build on this, never on a stale copy.
   const latest = useRef<ExamResult | null>(null);
-  const save = async (update: (r: ExamResult) => ExamResult) => {
+  const keepInAccount = syncEnabled(config.user);
+  /** `localOnly`: bookkeeping that stays in this browser; the record's version and the account copy are left alone. */
+  const save = async (update: (r: ExamResult) => ExamResult, { localOnly = false }: { localOnly?: boolean } = {}) => {
     if (!latest.current) return;
-    const next = update(latest.current);
+    const changed = update(latest.current);
+    const updatedAt = localOnly ? (changed.updatedAt ?? changed.createdAt) : Date.now();
+    const next = { ...changed, updatedAt };
     latest.current = next;
     setResult(next);
-    await localDocs.put("exam", next.id, next);
+    await localDocs.put("exam", next.id, next, { updatedAt });
+    if (!localOnly && keepInAccount) scheduleSync("exam", next.id, (s) => void adoptNewer(s.pushedVersion));
+  };
+
+  // The account had a newer copy (edited on another device) and it replaced ours: show it and build on it.
+  const adoptNewer = async (version: number | undefined) => {
+    if (!version || !latest.current || version <= (latest.current.updatedAt ?? 0)) return;
+    const doc = await localDocs.get<ExamResult>("exam", latest.current.id).catch(() => undefined);
+    if (!doc?.data) return;
+    latest.current = { ...doc.data, updatedAt: doc.updatedAt };
+    setResult(latest.current);
   };
 
   const signedIn = Boolean(config.user);
   useEffect(() => {
     void (async () => {
-      let r = (await localDocs.get<ExamResult>("exam", id).catch(() => undefined))?.data ?? null;
-      // Not in this browser: a member may have it in their account. Keep a local copy so edits work as usual.
-      if (!r && signedIn) {
-        r = await loadFromAccount(id).catch(() => null);
-        if (r) await localDocs.put("exam", r.id, r, { updatedAt: r.updatedAt ?? r.createdAt }).catch(() => {});
-      }
+      // Not in this browser: a member may have it in their account; a local copy is kept so edits work as usual.
+      const r = (await loadDoc<ExamResult>("exam", id, { account: signedIn }).catch(() => null))?.data ?? null;
       latest.current = r;
       setResult(r);
     })();
@@ -102,27 +113,14 @@ export function ReportApp({ id }: { id: string }) {
     const sig = researchSignature(result);
     if (sig === lastSig.current) return;
     lastSig.current = sig;
-    void syncResearch(result).then((research) => save((r) => ({ ...r, research: { ...research, deleted: r.research?.deleted } })));
+    void syncResearch(result).then((research) => save((r) => ({ ...r, research: { ...research, deleted: r.research?.deleted } }), { localOnly: true }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [result]);
-
-  // Account copy: same rule, for members who keep their records in the account.
-  const keepInAccount = Boolean(config.user?.recordsConsent);
-  const accountSyncing = useRef("");
-  useEffect(() => {
-    if (!result || !keepInAccount) return;
-    const sig = accountSignature(result);
-    if (result.account?.signature === sig && !result.account.error) return;
-    if (accountSyncing.current === sig) return;
-    accountSyncing.current = sig;
-    void syncToAccount(result).then((account) => save((r) => ({ ...r, account })));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [result, keepInAccount]);
 
   const removeResearch = async () => {
     if (!result) return;
     await deleteResearch(result);
-    await save((r) => ({ ...r, research: r.research ? { ...r.research, deleted: true } : r.research }));
+    await save((r) => ({ ...r, research: r.research ? { ...r.research, deleted: true } : r.research }), { localOnly: true });
   };
 
   const answerActualGrade = (g: Grade | "none") => void save((r) => ({ ...r, actualGrade: g }));

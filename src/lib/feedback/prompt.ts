@@ -1,3 +1,5 @@
+import { SKILLS } from "@/lib/domain/skills";
+import type { Lens } from "@/lib/feedback/lenses";
 import type { AnswerMetrics } from "@/lib/metrics";
 import type { ExamQuestion, Level } from "@/lib/types";
 import { TYPE_LABEL } from "@/lib/exam/compose";
@@ -54,7 +56,17 @@ function describeItem(item: EvalItem): string {
   ].join("\n");
 }
 
-export function questionSystemPrompt(): string {
+const SKILL_LIST = SKILLS.map((s) => `- ${s.id}: ${s.definition}`).join("\n");
+
+function skillRules(lens: Lens): string {
+  return `Skill tags. Use only these ids:
+${SKILL_LIST}
+
+- "skills": list the skills this answer clearly shows as a strength ("strong") or a weakness ("weak"). Only tag what the transcript gives evidence for; leave a skill out when unsure. Pay most attention to: ${lens.focus.join(", ")}.
+- Give each correction and upgrade the "skill" it belongs to when one fits; leave it out otherwise.`;
+}
+
+export function answersSystemPrompt(lens: Lens): string {
   return `${RUBRIC}
 
 Your job now: give detailed, per-answer feedback a Korean learner can act on.
@@ -66,10 +78,14 @@ Rules:
 - Prioritise. List the corrections that most affect the rating first; skip trivial ones if there are many.
 - The model answer keeps the speaker's own facts and ideas, rewritten one level above their performance (up to AL). Spoken, natural, not written prose. Roughly 60–90 seconds of speech at most.
 - Judge task completion against what the question actually asked (e.g. "ask three or four questions", "suggest two or three alternatives", "compare past and present").
-- Be direct. No praise that the transcript does not support.`;
+- Be direct. No praise that the transcript does not support.
+
+${skillRules(lens)}
+
+Focus for this feedback: ${lens.instructions}`;
 }
 
-export function questionUserPrompt(ctx: EvalContext): string {
+export function answersUserPrompt(ctx: EvalContext): string {
   return `Self-assessment level chosen: ${ctx.startLevel}, after re-adjustment: ${ctx.finalLevel}.
 
 Give feedback for each answer below, one item per question, in the same order.
@@ -88,7 +104,8 @@ Rules:
 - range_low and range_high give the plausible spread, at most two steps apart.
 - Write explanations in Korean, quoting the speaker's actual English as evidence.
 - "to_next": the changes that would most move this speaker to the next grade. "before" must be a sentence the speaker actually said; "after" is the same idea at the next grade.
-- "patterns": habits that recur across several answers (e.g. tense drift, the same filler, sentences always joined with "and").
+- "patterns": habits that recur across several answers (e.g. tense drift, the same filler, sentences always joined with "and"). Give each pattern the "skill" id it belongs to when one fits:
+${SKILL_LIST}
 - "plan": concrete practice for the next attempt, not generic advice.
 - Return the four criteria exactly once each: functions, content, accuracy, text_type.`;
 }

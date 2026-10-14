@@ -1,15 +1,16 @@
 import { guard } from "@/lib/server/access";
-import { readEvalRequest } from "@/lib/server/eval-request";
+import { apiError } from "@/lib/server/api-error";
+import { readFeedbackRequest } from "@/lib/server/feedback-request";
 import { generate, LlmError } from "@/lib/server/llm";
 import { OverallSchema } from "@/lib/feedback/schema";
-import { overallSystemPrompt, overallUserPrompt } from "@/lib/evaluation/prompts";
+import { overallSystemPrompt, overallUserPrompt } from "@/lib/feedback/prompt";
 
 export const maxDuration = 300;
 
 export async function POST(request: Request) {
   const denied = await guard();
   if (denied) return denied;
-  const req = await readEvalRequest(request);
+  const req = await readFeedbackRequest(request, 15);
   if (req instanceof Response) return req;
   try {
     const { data, usage } = await generate({
@@ -20,7 +21,7 @@ export async function POST(request: Request) {
     });
     return Response.json({ overall: data, usage });
   } catch (e) {
-    if (e instanceof LlmError) return Response.json({ error: e.message, kind: e.kind, retryAfter: e.retryAfter }, { status: e.status });
+    if (e instanceof LlmError) return apiError(e.status, e.message, { kind: e.kind, retryAfter: e.retryAfter });
     throw e;
   }
 }

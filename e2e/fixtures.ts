@@ -78,12 +78,12 @@ const USAGE = { inputTokens: 100, outputTokens: 100 };
 /** Answers the per-answer feedback and overall verdict requests with fixed, schema-valid content. */
 export async function mockFeedback(page: Page) {
   const answer = async (route: Route) => {
-    const body = route.request().postDataJSON() as { context: { items: { question: { number: number } }[] } };
+    const body = route.request().postDataJSON() as { lens?: string; ref?: string; context: { items: { question: { number: number } }[] } };
+    // The real API rejects requests without these; fail the same way so the tests notice.
+    if (!body.ref || !body.lens) return route.fulfill({ status: 400, json: { error: "요청 형식이 올바르지 않습니다.", kind: "invalid" } });
     await route.fulfill({ json: { items: body.context.items.map((i) => answerFeedback(i.question.number)), usage: USAGE } });
   };
   const overall = (route: Route) => route.fulfill({ json: { overall: OVERALL, usage: USAGE } });
-  await page.route("**/api/evaluate/questions", answer);
-  await page.route("**/api/evaluate/overall", overall);
   await page.route("**/api/feedback/answers", answer);
   await page.route("**/api/feedback/overall", overall);
 }

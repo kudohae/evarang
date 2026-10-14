@@ -290,7 +290,7 @@ export function ExamApp() {
           </>
         }
       >
-        <div className="-mt-4 flex min-h-[420px] flex-col rounded-panel border border-line bg-surface">
+        <div className="-mt-4 flex min-h-[420px] flex-col rounded-panel border border-line bg-surface shadow-panel">
           {sampleDone ? (
             <div className="rise flex flex-1 flex-col items-center justify-center px-6 text-center">
               <p className="text-[17px] font-semibold">연습이 끝났습니다.</p>

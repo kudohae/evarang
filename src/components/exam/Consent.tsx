@@ -14,7 +14,7 @@ const PROCESSORS = [
 
 function Box({ title, tag, children }: { title: string; tag: string; children: React.ReactNode }) {
   return (
-    <section className="rounded-panel border border-line bg-surface px-5 py-5 md:px-6">
+    <section className="rounded-panel border border-line bg-surface shadow-panel px-5 py-5 md:px-6">
       <h2 className="flex items-baseline gap-2 text-[16px] font-semibold">
         {title}
         <span className="text-[13px] font-normal text-ink-3">{tag}</span>

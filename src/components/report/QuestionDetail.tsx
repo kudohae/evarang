@@ -142,7 +142,7 @@ export function QuestionDetail({ question, answer, feedback }: { question: ExamQ
         </div>
       )}
 
-      <section className="mt-8 rounded-panel border border-line bg-surface px-5 py-5 md:px-7 md:py-6">
+      <section className="mt-8 rounded-panel border border-line bg-surface shadow-panel px-5 py-5 md:px-7 md:py-6">
         <Label>내 답변</Label>
         <div className="mt-3" lang="en">
           {answer?.transcript ? (

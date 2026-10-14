@@ -31,7 +31,7 @@ export function FallbackNotice({ reason, onClose, during }: { reason: FallbackRe
         role="dialog"
         aria-modal="true"
         aria-labelledby="fallback-title"
-        className="rise w-full max-w-[460px] rounded-panel bg-surface px-6 pb-6 pt-7 shadow-[0_12px_40px_-12px_rgba(23,23,26,0.35)]"
+        className="rise w-full max-w-[460px] rounded-panel bg-surface px-6 pb-6 pt-7 shadow-[0_12px_40px_-12px_rgb(0_0_0/0.35)]"
         onClick={(e) => e.stopPropagation()}
       >
         <h2 id="fallback-title" className="text-[18px] font-bold tracking-[-0.01em]">

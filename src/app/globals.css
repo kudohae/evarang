@@ -23,6 +23,8 @@
 
   --good: #166534;
   --good-soft: #f0fdf4;
+
+  --shadow-color: rgb(0 0 0 / 0.05);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -40,6 +42,7 @@
     --pen-ink: #fca5a5;
     --good: #aff33e;
     --good-soft: #14532d;
+    --shadow-color: rgb(0 0 0 / 0.4);
     color-scheme: dark;
   }
 }
@@ -58,6 +61,7 @@
   --pen-ink: #fca5a5;
   --good: #aff33e;
   --good-soft: #14532d;
+  --shadow-color: rgb(0 0 0 / 0.4);
   color-scheme: dark;
 }
 
@@ -82,11 +86,13 @@
 
   --color-good: var(--good);
   --color-good-soft: var(--good-soft);
+
+  --shadow-panel: 0 8px 20px 0 var(--shadow-color);
 }
 
 @theme {
-  --radius-ctl: 10px;
-  --radius-panel: 14px;
+  --radius-ctl: 12px;
+  --radius-panel: 1rem;
 
   --ease-out-soft: cubic-bezier(0.22, 1, 0.36, 1);
 }

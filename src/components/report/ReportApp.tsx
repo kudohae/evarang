@@ -187,7 +187,7 @@ export function ReportApp({ id }: { id: string }) {
           <h1 className="text-[26px] font-bold tracking-[-0.02em]">평가 전</h1>
           <p className="mt-3 text-[15px] leading-relaxed text-ink-2">답변 {transcribed}개를 받아썼습니다.</p>
           {missing > 0 && (
-            <div className="mt-6 rounded-panel border border-line bg-surface px-5 py-4">
+            <div className="mt-6 rounded-panel border border-line bg-surface shadow-panel px-5 py-4">
               <p className="text-[15px] leading-relaxed">
                 {transcribed === 0 ? "아직 받아쓴 답변이 없어 평가할 수 없습니다." : `답변 ${missing}개는 받아쓰지 못해 지금 평가하면 빠집니다.`} 녹음은 이 브라우저에 남아 있으니 다시 받아쓸 수 있습니다.
               </p>

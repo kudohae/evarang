@@ -113,7 +113,7 @@ export function Report({
         </div>
 
         {missing > 0 && !readOnly && (
-          <div className="no-print mt-6 rounded-panel border border-line bg-surface px-5 py-4 text-[14px] leading-relaxed">
+          <div className="no-print mt-6 rounded-panel border border-line bg-surface shadow-panel px-5 py-4 text-[14px] leading-relaxed">
             <p>답변 {missing}개는 받아쓰지 못해 이 평가에서 빠졌습니다. 다시 받아쓰면 그 답변까지 넣어 다시 평가할 수 있습니다.</p>
             {retryError && <p className="mt-1 text-pen-ink">{retryError}</p>}
             <button type="button" onClick={onRetranscribe} disabled={retrying} className="mt-2 font-semibold underline underline-offset-4 disabled:text-ink-3">

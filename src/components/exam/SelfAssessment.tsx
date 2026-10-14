@@ -67,7 +67,7 @@ export function SelfAssessment({
                 <input type="radio" name="level" checked={checked} onChange={() => onChange(level)} className="peer sr-only" />
                 <span
                   className={`tabular mt-px flex size-7 shrink-0 items-center justify-center rounded-full text-[14px] font-semibold transition-colors peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-ink ${
-                    checked ? "bg-ink text-paper" : "border-[1.5px] border-line-strong text-ink-2"
+                    checked ? "bg-primary text-primary-ink" : "border-[1.5px] border-line-strong text-ink-2"
                   }`}
                 >
                   {level}

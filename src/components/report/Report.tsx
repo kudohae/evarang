@@ -270,7 +270,7 @@ export function Report({
                   type="button"
                   onClick={() => setCurrent(q.number)}
                   className={`tabular h-9 min-w-9 rounded-ctl px-2 text-[14px] font-medium transition-colors ${
-                    q.number === current ? "bg-ink text-paper" : "text-ink-2 hover:bg-wash hover:text-ink"
+                    q.number === current ? "bg-primary text-primary-ink" : "text-ink-2 hover:bg-wash hover:text-ink"
                   }`}
                   aria-current={q.number === current}
                 >

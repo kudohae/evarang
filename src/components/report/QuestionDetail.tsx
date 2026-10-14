@@ -53,7 +53,7 @@ function AudioPlayer({ audioKey, fallbackSeconds }: { audioKey: string; fallback
       <button
         type="button"
         onClick={() => (playing ? ref.current?.pause() : void ref.current?.play())}
-        className="flex size-9 shrink-0 items-center justify-center rounded-full bg-ink text-paper transition-transform active:scale-95"
+        className="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary text-primary-ink transition-transform active:scale-95"
         aria-label={playing ? "일시정지" : "내 답변 듣기"}
       >
         <Icon name={playing ? "pause" : "play"} className="size-3.5" />

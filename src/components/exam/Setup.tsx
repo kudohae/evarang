@@ -23,7 +23,7 @@ function Step({ n, title, done, children }: { n: number; title: string; done: bo
   return (
     <section className="border-t border-line py-8 first:border-t-0 first:pt-0">
       <h2 className="flex items-center gap-3 text-[17px] font-semibold">
-        <span className={`tabular flex size-6 items-center justify-center rounded-full text-[13px] ${done ? "bg-ink text-paper" : "border-[1.5px] border-line-strong text-ink-2"}`}>
+        <span className={`tabular flex size-6 items-center justify-center rounded-full text-[13px] ${done ? "bg-primary text-primary-ink" : "border-[1.5px] border-line-strong text-ink-2"}`}>
           {done ? (
             <svg viewBox="0 0 12 12" className="size-[11px]" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M2.5 6.2 5 8.5l4.5-5" strokeLinecap="round" strokeLinejoin="round" />

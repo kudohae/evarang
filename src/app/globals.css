@@ -1,29 +1,90 @@
 @import "tailwindcss";
 
 /*
-  One typeface, one accent.
-  Ink black carries the interface; the red pen appears only where something is
-  being recorded or corrected. Everything else is spacing and weight.
+  Slate ink on near-white, one lime accent for the thing to press or the thing chosen.
+  Red stays for recording and corrections. Dark mode follows the system, or a .dark class on <html>.
 */
+:root {
+  --paper: #fbfcf8;
+  --surface: #ffffff;
+  --ink: #0f172a;
+  --ink-2: #475569;
+  --ink-3: #64748b;
+  --line: #e2e8f0;
+  --line-strong: #cbd5e1;
+  --wash: #f1f5f9;
+
+  --primary: #aff33e;
+  --primary-ink: #000000;
+
+  --pen: #ef4444;
+  --pen-soft: #fef2f2;
+  --pen-ink: #b91c1c;
+
+  --good: #166534;
+  --good-soft: #f0fdf4;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not(.light) {
+    --paper: #020617;
+    --surface: #0f172a;
+    --ink: #f8fafc;
+    --ink-2: #cbd5e1;
+    --ink-3: #94a3b8;
+    --line: #1e293b;
+    --line-strong: #334155;
+    --wash: #1e293b;
+    --pen: #f87171;
+    --pen-soft: #2a1215;
+    --pen-ink: #fca5a5;
+    --good: #aff33e;
+    --good-soft: #14532d;
+    color-scheme: dark;
+  }
+}
+
+:root.dark {
+  --paper: #020617;
+  --surface: #0f172a;
+  --ink: #f8fafc;
+  --ink-2: #cbd5e1;
+  --ink-3: #94a3b8;
+  --line: #1e293b;
+  --line-strong: #334155;
+  --wash: #1e293b;
+  --pen: #f87171;
+  --pen-soft: #2a1215;
+  --pen-ink: #fca5a5;
+  --good: #aff33e;
+  --good-soft: #14532d;
+  color-scheme: dark;
+}
+
+@theme inline {
+  --font-sans: "Wanted Sans Variable", "Wanted Sans", -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+
+  --color-paper: var(--paper);
+  --color-surface: var(--surface);
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-ink-3: var(--ink-3);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-wash: var(--wash);
+
+  --color-primary: var(--primary);
+  --color-primary-ink: var(--primary-ink);
+
+  --color-pen: var(--pen);
+  --color-pen-soft: var(--pen-soft);
+  --color-pen-ink: var(--pen-ink);
+
+  --color-good: var(--good);
+  --color-good-soft: var(--good-soft);
+}
+
 @theme {
-  --font-sans: "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
-
-  --color-paper: #fbfaf7;
-  --color-surface: #ffffff;
-  --color-ink: #17171a;
-  --color-ink-2: #4d4d55;
-  --color-ink-3: #8b8b93;
-  --color-line: #e6e3dc;
-  --color-line-strong: #cfcbc2;
-  --color-wash: #f3f1ec;
-
-  --color-pen: #cf3b26;
-  --color-pen-soft: #fbebe7;
-  --color-pen-ink: #a52a17;
-
-  --color-good: #2c6a4d;
-  --color-good-soft: #e8f2ec;
-
   --radius-ctl: 10px;
   --radius-panel: 14px;
 
@@ -39,7 +100,7 @@ html {
 
 body {
   font-family: var(--font-sans);
-  font-feature-settings: "ss06", "tnum" 0;
+  letter-spacing: -0.01em;
   word-break: keep-all;
   overflow-wrap: anywhere;
   min-height: 100dvh;
@@ -50,7 +111,7 @@ body {
 }
 
 ::selection {
-  background: var(--color-pen-soft);
+  background: color-mix(in srgb, var(--color-primary) 45%, transparent);
   color: var(--color-ink);
 }
 
@@ -100,9 +161,15 @@ body {
 }
 
 @media print {
-  html,
-  body {
-    background: #fff;
+  :root {
+    --paper: #ffffff;
+    --surface: #ffffff;
+    --ink: #0f172a;
+    --ink-2: #475569;
+    --ink-3: #64748b;
+    --line: #e2e8f0;
+    --line-strong: #cbd5e1;
+    --wash: #f1f5f9;
   }
   .no-print {
     display: none !important;

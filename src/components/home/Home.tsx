@@ -56,7 +56,7 @@ export function Home() {
           <div className="mt-10 flex flex-wrap items-center gap-x-5 gap-y-3">
             <Link
               href="/test"
-              className="inline-flex h-13 items-center gap-2 rounded-ctl bg-ink px-7 text-[16px] font-semibold text-paper transition-[background-color,transform] duration-150 hover:bg-ink/88 active:scale-[0.985]"
+              className="inline-flex h-13 items-center gap-2 rounded-ctl bg-primary px-7 text-[16px] font-semibold text-primary-ink transition-[filter,transform] duration-150 hover:brightness-95 active:scale-[0.985]"
             >
               모의고사 시작
               <Icon name="arrow" className="size-4" />

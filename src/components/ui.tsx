@@ -4,7 +4,7 @@ import type { ComponentProps, ReactNode } from "react";
 type Variant = "primary" | "secondary" | "quiet";
 
 const VARIANTS: Record<Variant, string> = {
-  primary: "bg-ink text-paper hover:bg-ink/88 disabled:bg-line-strong disabled:text-surface",
+  primary: "bg-primary text-primary-ink hover:brightness-95 disabled:bg-line-strong disabled:text-surface",
   secondary: "border border-line-strong bg-surface text-ink hover:border-ink disabled:text-ink-3 disabled:hover:border-line-strong",
   quiet: "text-ink-2 hover:text-ink hover:bg-wash disabled:text-ink-3 disabled:hover:bg-transparent",
 };
@@ -57,13 +57,13 @@ export function ChoiceRow({
         aria-hidden
         className={`mt-[3px] flex size-[18px] shrink-0 items-center justify-center border-[1.5px] transition-colors peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-ink ${
           type === "radio" ? "rounded-full" : "rounded-[5px]"
-        } ${checked ? "border-ink bg-ink" : "border-line-strong bg-surface group-hover:border-ink-3"}`}
+        } ${checked ? "border-primary bg-primary" : "border-line-strong bg-surface group-hover:border-ink-3"}`}
       >
         {checked &&
           (type === "radio" ? (
-            <span className="size-[6px] rounded-full bg-paper" />
+            <span className="size-[6px] rounded-full bg-primary-ink" />
           ) : (
-            <svg viewBox="0 0 12 12" className="size-[11px] text-paper" fill="none" stroke="currentColor" strokeWidth="2">
+            <svg viewBox="0 0 12 12" className="size-[11px] text-primary-ink" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M2.5 6.2 5 8.5l4.5-5" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
           ))}

@@ -13,7 +13,8 @@ import { SelfAssessment } from "@/components/exam/SelfAssessment";
 import { Setup } from "@/components/exam/Setup";
 import { EMPTY_SURVEY, Survey } from "@/components/exam/Survey";
 import { resolveVoice, useVoices, type Recording } from "@/lib/client/audio";
-import { putAudio, putResult } from "@/lib/client/db";
+import { putAudio } from "@/lib/client/db";
+import { localDocs } from "@/lib/docs/local";
 import { SAMPLE_QUESTION } from "@/lib/content/levels";
 import { adjustLevel, composeSession1, composeSession2, questionCount } from "@/lib/exam/compose";
 import { CONSENT_VERSION, newId, type ExamResult } from "@/lib/exam/result";
@@ -188,7 +189,7 @@ export function ExamApp() {
       consent: { version: CONSENT_VERSION, research: consent.research, at: createdAt.current },
       ...(consent.research ? { research: { secret: newSecret(), uploaded: [] } } : {}),
     };
-    await putResult(result.id, result);
+    await localDocs.put("exam", result.id, result);
     router.replace(`/results/${result.id}`);
   }, [adjustment, answers, consent.research, finalLevel, questions, router, startLevel, survey, timedOut]);
 

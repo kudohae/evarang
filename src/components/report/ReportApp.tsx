@@ -7,7 +7,7 @@ import { Report } from "@/components/report/Report";
 import { WaitingRoom } from "@/components/report/WaitingRoom";
 import { Button, Icon, Spinner, Wordmark } from "@/components/ui";
 import { evaluate, type Progress } from "@/lib/client/evaluate";
-import { getResult, putResult } from "@/lib/client/db";
+import { localDocs } from "@/lib/docs/local";
 import { accountSignature, loadFromAccount, loadRecording, syncToAccount } from "@/lib/client/account-records";
 import { transcribeBlob } from "@/lib/client/transcribe";
 import { deleteResearch, researchSignature, syncResearch, wantsResearch } from "@/lib/client/research";
@@ -49,17 +49,17 @@ export function ReportApp({ id }: { id: string }) {
     const next = update(latest.current);
     latest.current = next;
     setResult(next);
-    await putResult(next.id, next);
+    await localDocs.put("exam", next.id, next);
   };
 
   const signedIn = Boolean(config.user);
   useEffect(() => {
     void (async () => {
-      let r = (await getResult<ExamResult>(id).catch(() => undefined)) ?? null;
+      let r = (await localDocs.get<ExamResult>("exam", id).catch(() => undefined))?.data ?? null;
       // Not in this browser: a member may have it in their account. Keep a local copy so edits work as usual.
       if (!r && signedIn) {
         r = await loadFromAccount(id).catch(() => null);
-        if (r) await putResult(r.id, r).catch(() => {});
+        if (r) await localDocs.put("exam", r.id, r, { updatedAt: r.updatedAt ?? r.createdAt }).catch(() => {});
       }
       latest.current = r;
       setResult(r);

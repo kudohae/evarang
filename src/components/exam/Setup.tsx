@@ -6,7 +6,7 @@ import { Frame } from "@/components/exam/Frame";
 import { FallbackNotice } from "@/components/FallbackNotice";
 import { transcribeBlob } from "@/lib/client/transcribe";
 import type { FallbackReason } from "@/lib/types";
-import { Recorder, requestMic, resolveVoice, saveVoiceName, speak, useMicLevel, useVoices, type Speech } from "@/lib/client/audio";
+import { Recorder, resolveVoice, saveVoiceName, speak, useMicLevel, useVoices, type Speech } from "@/lib/client/audio";
 import { SETUP_PROMPT } from "@/lib/content/levels";
 
 const TEST_SECONDS = 8;
@@ -41,13 +41,14 @@ function Step({ n, title, done, children }: { n: number; title: string; done: bo
 
 export function Setup({
   stream,
-  onStream,
+  onConnect,
   onNext,
   onBack,
   onFallback,
 }: {
   stream: MediaStream | null;
-  onStream: (s: MediaStream) => void;
+  /** Asks for the microphone (useMicrophone); null when it was refused or failed. */
+  onConnect: () => Promise<MediaStream | null>;
   /** Called when the check had to use the backup recogniser, so the test does not announce it again. */
   onFallback: (reason: FallbackReason) => void;
   onNext: () => void;
@@ -87,11 +88,7 @@ export function Setup({
 
   const connect = async () => {
     setMicError("");
-    try {
-      onStream(await requestMic());
-    } catch {
-      setMicError("마이크를 사용할 수 없습니다. 브라우저 주소창의 권한 설정에서 마이크를 허용한 뒤 다시 시도하세요.");
-    }
+    if (!(await onConnect())) setMicError("마이크를 사용할 수 없습니다. 브라우저 주소창의 권한 설정에서 마이크를 허용한 뒤 다시 시도하세요.");
   };
 
   const recordTest = async () => {

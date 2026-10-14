@@ -119,7 +119,7 @@ Gemini 3.8 Flash → 3.7 Flash → 3.6 Flash → 3.5 Flash → 3.5 Flash-Lite �
 
 자료마다 엇갈려 다수 의견을 따른 것: 다시 듣기는 질문이 끝난 뒤 5초 안에만 가능, 질문이 끝나면 바로 녹음 시작, 3~4단계의 Q14~15는 비교 + 질문하기.
 
-규칙은 `src/lib/exam/compose.ts`와 `src/components/exam/QuestionStage.tsx`(`REPLAY_WINDOW_MS`)에 모여 있습니다.
+규칙은 `src/lib/exam/compose.ts`와 `src/lib/capture/policy.ts`(`EXAM_POLICY`: 다시 듣기 5초 안에 1번, 질문 글자 숨김, 다시 말하기 없음)에 모여 있습니다.
 
 ## 한계
 

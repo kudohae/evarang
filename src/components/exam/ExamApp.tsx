@@ -7,13 +7,14 @@ import { Frame } from "@/components/exam/Frame";
 import { Consent, type ConsentAnswers } from "@/components/exam/Consent";
 import { newSecret } from "@/lib/client/research";
 import { FallbackNotice } from "@/components/FallbackNotice";
-import { transcribeBlob } from "@/lib/client/transcribe";
-import { QuestionStage } from "@/components/exam/QuestionStage";
+import { AnswerStage } from "@/components/exam/QuestionStage";
 import { SelfAssessment } from "@/components/exam/SelfAssessment";
 import { Setup } from "@/components/exam/Setup";
 import { EMPTY_SURVEY, Survey } from "@/components/exam/Survey";
 import { resolveVoice, useVoices, type Recording } from "@/lib/client/audio";
-import { putAudio } from "@/lib/client/db";
+import { EXAM_POLICY } from "@/lib/capture/policy";
+import { keepAndTranscribe } from "@/lib/capture/pipeline";
+import { useMicrophone } from "@/lib/capture/useMicrophone";
 import { localDocs } from "@/lib/docs/local";
 import { syncEnabled } from "@/lib/docs/policy";
 import { scheduleSync } from "@/lib/docs/sync";
@@ -69,7 +70,8 @@ export function ExamApp() {
   const [surveyPage, setSurveyPage] = useState(0);
   const [survey, setSurvey] = useState<SurveyAnswers>(EMPTY_SURVEY);
   const [startLevel, setStartLevel] = useState<Level | null>(null);
-  const [stream, setStream] = useState<MediaStream | null>(null);
+  const mic = useMicrophone();
+  const stream = mic.stream;
   const [sampleDone, setSampleDone] = useState(false);
   const [sampleKey, setSampleKey] = useState(0);
 
@@ -83,7 +85,7 @@ export function ExamApp() {
 
   const [answers, setAnswers] = useState<AnswerRecord[]>([]);
   const [pending, setPending] = useState<Pending>({});
-  const blobs = useRef(new Map<number, { blob: Blob; durationMs: number }>());
+  const blobs = useRef(new Map<number, Recording>());
   // The fallback notice appears at most once: in setup, or after the test if credit ran out mid-way. Never during a question.
   const fallbackSeen = useRef(false);
   const [pendingNotice, setPendingNotice] = useState<FallbackReason | null>(null);
@@ -100,8 +102,6 @@ export function ExamApp() {
     return () => window.removeEventListener("beforeunload", warn);
   }, [step]);
 
-  useEffect(() => () => stream?.getTracks().forEach((t) => t.stop()), [stream]);
-
   const total = finalLevel ? questionCount(finalLevel) : startLevel ? questionCount(startLevel) : 15;
 
   const runTranscription = useCallback(async (number: number) => {
@@ -109,7 +109,7 @@ export function ExamApp() {
     if (!rec) return;
     setPending((p) => ({ ...p, [number]: "uploading" }));
     try {
-      const { transcript, fallback } = await transcribeBlob(rec.blob, rec.durationMs, `${examId.current}:${number}`);
+      const { transcript, fallback } = await keepAndTranscribe(rec, `${examId.current}:${number}`);
       if (fallback && !fallbackSeen.current) {
         fallbackSeen.current = true;
         setPendingNotice(fallback);
@@ -145,8 +145,7 @@ export function ExamApp() {
   const onAnswer = async (rec: Recording, replayed: boolean) => {
     const q = questions[index];
     const audioKey = `${examId.current}:${q.number}`;
-    blobs.current.set(q.number, { blob: rec.blob, durationMs: rec.durationMs });
-    await putAudio(audioKey, rec.blob).catch(() => {});
+    blobs.current.set(q.number, rec);
     setAnswers((list) => [
       ...list.filter((a) => a.number !== q.number),
       { number: q.number, audioKey, mimeType: rec.mimeType, durationMs: rec.durationMs, replayed },
@@ -262,7 +261,7 @@ export function ExamApp() {
   if (step === "setup") {
     return <Setup
         stream={stream}
-        onStream={setStream}
+        onConnect={mic.request}
         onFallback={() => (fallbackSeen.current = true)}
         onBack={() => setStep("self")}
         onNext={() => setStep("sample")}
@@ -303,7 +302,7 @@ export function ExamApp() {
               <p className="mt-2 max-w-[380px] text-[15px] leading-relaxed text-ink-2">본 시험에서도 질문 글자는 보이지 않습니다. 다시 듣기는 질문이 끝난 뒤 5초 안에 한 번만 쓸 수 있습니다.</p>
             </div>
           ) : (
-            <QuestionStage key={sampleKey} voice={voice} stream={stream} text={SAMPLE_QUESTION} onDone={() => setSampleDone(true)} />
+            <AnswerStage key={sampleKey} voice={voice} stream={stream} text={SAMPLE_QUESTION} policy={EXAM_POLICY} onDone={() => setSampleDone(true)} />
           )}
         </div>
       </Frame>
@@ -345,7 +344,7 @@ export function ExamApp() {
     return (
       <div className="flex min-h-dvh flex-col">
         <TestHeader number={q.number} total={total} deadline={deadline} />
-        <QuestionStage key={q.number} voice={voice} stream={stream} text={q.text} deadline={deadline} onDone={onAnswer} />
+        <AnswerStage key={q.number} voice={voice} stream={stream} text={q.text} policy={EXAM_POLICY} deadline={deadline} onDone={onAnswer} />
       </div>
     );
   }

@@ -104,7 +104,7 @@ export function ExamApp() {
     if (!rec) return;
     setPending((p) => ({ ...p, [number]: "uploading" }));
     try {
-      const { transcript, fallback } = await transcribeBlob(rec.blob, rec.durationMs);
+      const { transcript, fallback } = await transcribeBlob(rec.blob, rec.durationMs, `${examId.current}:${number}`);
       if (fallback && !fallbackSeen.current) {
         fallbackSeen.current = true;
         setPendingNotice(fallback);

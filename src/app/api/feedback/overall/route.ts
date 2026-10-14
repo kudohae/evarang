@@ -1,6 +1,6 @@
 import { guard } from "@/lib/server/access";
 import { apiError } from "@/lib/server/api-error";
-import { readFeedbackRequest } from "@/lib/server/feedback-request";
+import { meterFeedback, readFeedbackRequest } from "@/lib/server/feedback-request";
 import { generate, LlmError } from "@/lib/server/llm";
 import { OverallSchema } from "@/lib/feedback/schema";
 import { overallSystemPrompt, overallUserPrompt } from "@/lib/feedback/prompt";
@@ -12,6 +12,8 @@ export async function POST(request: Request) {
   if (denied) return denied;
   const req = await readFeedbackRequest(request, 15);
   if (req instanceof Response) return req;
+  const spent = await meterFeedback(req);
+  if (spent) return spent;
   try {
     const { data, usage } = await generate({
       model: req.model,

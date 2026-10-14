@@ -1,6 +1,7 @@
 import { AssemblyAI } from "assemblyai";
 import { apiError } from "@/lib/server/api-error";
 import { guard } from "@/lib/server/access";
+import { meter, MeterError } from "@/lib/server/meter";
 import { geminiSttConfigured, geminiTranscribe } from "@/lib/server/gemini-stt";
 import type { FallbackReason, TranscribeResponse } from "@/lib/types";
 
@@ -61,6 +62,15 @@ export async function POST(request: Request) {
   const audio = Buffer.from(await request.arrayBuffer());
   if (audio.length === 0) return apiError(400, "녹음 파일이 비어 있습니다.", { kind: "invalid" });
   if (audio.length > MAX_BYTES) return apiError(413, "녹음 파일이 너무 큽니다.", { kind: "invalid" });
+
+  // The recording's key: transcribing the same recording again the same day is not counted twice.
+  const ref = request.headers.get("x-usage-ref")?.slice(0, 100) || crypto.randomUUID();
+  try {
+    await meter("transcribe", 1, ref);
+  } catch (e) {
+    if (e instanceof MeterError) return apiError(429, e.message, { kind: "quota", remaining: e.remaining, resetAt: e.resetAt });
+    throw e;
+  }
 
   try {
     return Response.json(await assembly(audio));

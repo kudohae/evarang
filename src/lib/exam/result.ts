@@ -15,6 +15,8 @@ export type Evaluation = {
 export type ExamResult = {
   id: string;
   createdAt: number;
+  /** Last local change, for sync. Missing on results saved before sync existed. */
+  updatedAt?: number;
   finishedAt: number;
   timedOut: boolean;
   survey: SurveyAnswers;
@@ -30,7 +32,7 @@ export type ExamResult = {
   consent?: { version: string; research: boolean; at: number };
   /** Local bookkeeping for the research copy. The secret never leaves this browser except to prove ownership. */
   research?: { secret: string; uploaded: number[]; syncedAt?: number; deleted?: boolean; error?: string };
-  /** Local bookkeeping for the copy kept in the member's account. */
+  /** Old per-record account bookkeeping (user_exams). Read only, to migrate legacy records; sync state now lives in the docs store. */
   account?: { uploaded: number[]; signature?: string; syncedAt?: number; error?: string };
 };
 

@@ -39,6 +39,78 @@ function fromAccount(e: AccountExam): Row {
   return { id: e.id, createdAt: Date.parse(e.createdAt), grade: e.grade, startLevel: e.startLevel, finalLevel: e.finalLevel, count: e.questionCount, model: e.model };
 }
 
+function Soon() {
+  return <span className="shrink-0 text-[13px] text-ink-3">준비 중</span>;
+}
+
+/** What the site offers. Only the mock test is open; the rest are listed so the plan is visible, not clickable. */
+function Menu() {
+  const idle = "flex items-center gap-5 py-5";
+  return (
+    <nav aria-label="메뉴" className="mt-12">
+      <ul className="border-t border-line">
+        <li className="border-b border-line">
+          <Link href="/test" className={`group ${idle}`}>
+            <span className="min-w-0 flex-1">
+              <span className="block text-[18px] font-semibold tracking-[-0.01em]">모의고사</span>
+              <span className="mt-1 block text-[14px] leading-relaxed text-ink-2">실제 순서 그대로 12~15문항. 끝나면 예상 등급과 문항별 첨삭을 받습니다.</span>
+            </span>
+            <span className="hidden shrink-0 text-[13px] text-ink-3 sm:block">약 60분 · 마이크 필요</span>
+            <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-primary text-primary-ink transition-transform duration-150 group-hover:translate-x-0.5">
+              <Icon name="arrow" className="size-4" />
+            </span>
+          </Link>
+        </li>
+        <li className="border-b border-line" aria-disabled="true">
+          <div className={idle}>
+            <span className="min-w-0 flex-1">
+              <span className="block text-[18px] font-semibold tracking-[-0.01em] text-ink-3">첨삭노트</span>
+              <span className="mt-1 block text-[14px] leading-relaxed text-ink-3">모의고사에서 고친 표현을 모아, 소리 내어 다시 말하며 복습합니다.</span>
+            </span>
+            <Soon />
+          </div>
+        </li>
+        <li className="border-b border-line py-5" aria-disabled="true">
+          <span className="block text-[18px] font-semibold tracking-[-0.01em] text-ink-3">맞춤형 연습</span>
+          <span className="mt-1 block text-[14px] leading-relaxed text-ink-3">약한 곳만 골라 한 문항씩 연습합니다.</span>
+          <ul className="mt-3 flex flex-col gap-2 border-l-2 border-line pl-4">
+            <li className="flex items-baseline gap-5">
+              <span className="min-w-0 flex-1 text-[15px] text-ink-3">
+                <span className="font-semibold">문항별</span> · 묘사, 루틴, 과거 경험, 롤플레이, 비교, 사회 이슈
+              </span>
+              <Soon />
+            </li>
+            <li className="flex items-baseline gap-5">
+              <span className="min-w-0 flex-1 text-[15px] text-ink-3">
+                <span className="font-semibold">주제별</span> · 서베이에서 고른 주제와 돌발 주제
+              </span>
+              <Soon />
+            </li>
+          </ul>
+        </li>
+        <li className="border-b border-line" aria-disabled="true">
+          <div className={idle}>
+            <span className="min-w-0 flex-1">
+              <span className="block text-[18px] font-semibold tracking-[-0.01em] text-ink-3">문장 구조화 연습</span>
+              <span className="mt-1 block text-[14px] leading-relaxed text-ink-3">바로 답하기, 이유, 예시, 내 생각. 한 단계씩 천천히 쌓아 말합니다.</span>
+            </span>
+            <Soon />
+          </div>
+        </li>
+        <li className="border-b border-line" aria-disabled="true">
+          <div className={idle}>
+            <span className="min-w-0 flex-1">
+              <span className="block text-[18px] font-semibold tracking-[-0.01em] text-ink-3">스토리뱅크</span>
+              <span className="mt-1 block text-[14px] leading-relaxed text-ink-3">내 경험으로 여러 주제에 돌려 쓸 이야기를 만들어 둡니다.</span>
+            </span>
+            <Soon />
+          </div>
+        </li>
+      </ul>
+    </nav>
+  );
+}
+
 const DISMISS_KEY = "evarang:records-prompt-dismissed";
 
 /** Asks a signed-in member, once, whether to keep test records in the account. */
@@ -163,18 +235,9 @@ export function Home() {
             말한 그대로 첨삭받는 모의고사
           </h1>
           <p className="mt-5 max-w-[560px] text-[17px] leading-[1.7] text-ink-2">
-            Background Survey부터 난이도 재조정까지 시험 진행을 그대로 따릅니다. 끝나면 예상 등급과 문항별 첨삭을 받습니다.
+            모의고사로 지금 수준을 확인하고, 약한 곳을 골라 연습합니다.
           </p>
-          <div className="mt-10 flex flex-wrap items-center gap-x-5 gap-y-3">
-            <Link
-              href="/test"
-              className="inline-flex h-13 items-center gap-2 rounded-ctl bg-primary px-7 text-[16px] font-semibold text-primary-ink transition-[filter,transform] duration-150 hover:brightness-95 active:scale-[0.985]"
-            >
-              모의고사 시작
-              <Icon name="arrow" className="size-4" />
-            </Link>
-            <span className="text-[14px] text-ink-3">약 60분 · 마이크 필요</span>
-          </div>
+          <Menu />
           {!config.stt && <p className="mt-6 text-[14px] text-pen-ink">서버에 음성인식 키가 설정되지 않아 지금은 답변을 받아쓸 수 없습니다.</p>}
         </section>
 

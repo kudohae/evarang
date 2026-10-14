@@ -1,4 +1,4 @@
-import type { OverallFeedback, QuestionFeedback } from "@/lib/evaluation/schema";
+import type { OverallFeedback, QuestionFeedback } from "@/lib/feedback/schema";
 import type { Usage } from "@/lib/models";
 import type { Adjustment, AnswerRecord, ExamQuestion, Grade, Level, SurveyAnswers } from "@/lib/types";
 

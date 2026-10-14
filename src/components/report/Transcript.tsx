@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import type { QuestionFeedback } from "@/lib/evaluation/schema";
+import type { QuestionFeedback } from "@/lib/feedback/schema";
 import { isFiller } from "@/lib/metrics";
 import type { Transcript as T } from "@/lib/types";
 

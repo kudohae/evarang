@@ -1,9 +1,16 @@
 import { z } from "zod";
+import { SKILL_IDS } from "@/lib/domain/skills";
 import { GRADES } from "@/lib/types";
 
 const Grade = z.enum(GRADES);
+const Skill = z.enum(SKILL_IDS);
 
-export const QuestionFeedbackSchema = z.object({
+export const SkillMarkSchema = z.object({
+  skill: Skill,
+  verdict: z.enum(["strong", "weak"]).describe("이 답변에서 이 이름표가 강점인지 약점인지"),
+});
+
+export const AnswerFeedbackSchema = z.object({
   number: z.number().int().describe("문항 번호"),
   verdict: z.string().describe("이 답변에 대한 한 문장 판정. 한국어."),
   performance: Grade.describe("이 답변 하나만 봤을 때의 수준"),
@@ -18,6 +25,7 @@ export const QuestionFeedbackSchema = z.object({
         corrected: z.string().describe("고친 영어 표현"),
         kind: z.enum(["grammar", "vocabulary", "expression"]),
         reason: z.string().describe("왜 고쳐야 하는지. 한국어, 한두 문장."),
+        skill: Skill.optional().describe("이 교정이 속하는 이름표"),
       }),
     )
     .describe("명백한 오류만. 중요도 순."),
@@ -27,6 +35,7 @@ export const QuestionFeedbackSchema = z.object({
         original: z.string().describe("답변 원문에서 그대로 복사한 구간"),
         better: z.string().describe("한 단계 위 등급에서 쓸 만한 표현"),
         reason: z.string().describe("어떤 점이 나아지는지. 한국어."),
+        skill: Skill.optional().describe("이 표현이 키우는 이름표"),
       }),
     )
     .describe("틀리진 않았지만 더 높은 수준으로 바꿀 수 있는 표현"),
@@ -38,10 +47,11 @@ export const QuestionFeedbackSchema = z.object({
   }),
   strengths: z.array(z.string()).describe("실제로 잘한 점. 한국어. 근거가 되는 표현을 따옴표로 인용."),
   model_answer: z.string().describe("사용자의 내용을 살려 한 단계 위 등급으로 다시 쓴 영어 답변"),
+  skills: z.array(SkillMarkSchema).describe("이 답변에서 뚜렷하게 드러난 강점과 약점 이름표. 근거가 없으면 넣지 않는다."),
 });
 
-export const QuestionBatchSchema = z.object({
-  items: z.array(QuestionFeedbackSchema),
+export const AnswerBatchSchema = z.object({
+  items: z.array(AnswerFeedbackSchema),
 });
 
 const Criterion = z.object({
@@ -73,6 +83,7 @@ export const OverallSchema = z.object({
         title: z.string(),
         detail: z.string(),
         examples: z.array(z.string()).describe("여러 문항에서 실제로 나온 표현"),
+        skill: Skill.optional().describe("이 습관에 해당하는 이름표"),
       }),
     )
     .describe("여러 답변에 반복해서 나타난 습관이나 오류"),
@@ -81,5 +92,10 @@ export const OverallSchema = z.object({
     .describe("다음 응시 전까지 할 구체적 연습"),
 });
 
-export type QuestionFeedback = z.infer<typeof QuestionFeedbackSchema>;
+export type SkillMark = z.infer<typeof SkillMarkSchema>;
+export type AnswerFeedback = z.infer<typeof AnswerFeedbackSchema>;
 export type OverallFeedback = z.infer<typeof OverallSchema>;
+/** Older name of the same shape, kept for the report components. */
+export type QuestionFeedback = AnswerFeedback;
+/** Older name of the batch schema. */
+export const QuestionBatchSchema = AnswerBatchSchema;

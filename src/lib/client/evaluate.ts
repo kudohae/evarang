@@ -1,6 +1,6 @@
 "use client";
 
-import type { OverallFeedback, QuestionFeedback } from "@/lib/evaluation/schema";
+import type { OverallFeedback, QuestionFeedback } from "@/lib/feedback/schema";
 import type { EvalContext, EvalItem } from "@/lib/evaluation/prompts";
 import { answerMetrics } from "@/lib/metrics";
 import { MODELS, modelById, type Usage } from "@/lib/models";

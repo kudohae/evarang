@@ -13,7 +13,7 @@
 ## Global Constraints
 
 - 모의고사의 사용자 동작은 바뀌지 않는다. 예외는 사용량 한도뿐이다.
-- 이름표 id는 스펙 3.1의 25개를 그대로 쓴다. 바꾸거나 지우지 않는다.
+- 이름표 id는 스펙 3.1의 21개를 그대로 쓴다. 바꾸거나 지우지 않는다.
 - 종류: `exam | session | note | story`. `note`, `story`의 `data` 모양은 정하지 않는다.
 - 저장 정책 기본값은 `local-first`.
 - 행동별 하루 무료 횟수(비회원/회원): `exam.evaluate` 1/2, `feedback.answer` 10/30, `feedback.light` 30/100, `transcribe` 40/120, `story.generate` 0/3.
@@ -87,8 +87,8 @@
   - `AnswerBatchSchema = z.object({ items: z.array(AnswerFeedbackSchema) })`, `OverallSchema`(지금 것 + `patterns[].skill` optional)
   - `type AnswerFeedback`, `type OverallFeedback`, 그리고 옛 이름 `QuestionFeedback = AnswerFeedback`(별칭)
 
-- [ ] **Step 1:** 시험 `skills are unique and complete`: `SKILL_IDS.length === 25`, 중복 없음, 모든 id가 `group.name` 형식, `definition`이 비어 있지 않음.
-- [ ] **Step 2:** 시험 `answer schema rejects unknown skills`: `skills: [{ skill: "made.up", verdict: "weak" }]` → 실패. `skills: []`와 교정 `skill` 생략 → 통과. `z.toJSONSchema(AnswerBatchSchema)`에 `enum`으로 25개가 들어 있음.
+- [ ] **Step 1:** 시험 `skills are unique and complete`: `SKILL_IDS.length === 21`, 중복 없음, 모든 id가 `group.name` 형식, `definition`이 비어 있지 않음.
+- [ ] **Step 2:** 시험 `answer schema rejects unknown skills`: `skills: [{ skill: "made.up", verdict: "weak" }]` → 실패. `skills: []`와 교정 `skill` 생략 → 통과. `z.toJSONSchema(AnswerBatchSchema)`에 `enum`으로 21개가 들어 있음.
 - [ ] **Step 3:** 구현(이름과 정의 문구는 스펙 3.1의 한국어 이름 + 영어 한 줄 정의). 실패 → 통과 확인.
 - [ ] **Step 4:** `npm run typecheck`. 커밋 `feat: skill taxonomy and skill-tagged feedback schema`.
 

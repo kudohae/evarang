@@ -1,7 +1,7 @@
 import { guard } from "@/lib/server/access";
 import { readEvalRequest } from "@/lib/server/eval-request";
 import { generate, LlmError } from "@/lib/server/llm";
-import { QuestionBatchSchema } from "@/lib/evaluation/schema";
+import { QuestionBatchSchema } from "@/lib/feedback/schema";
 import { questionSystemPrompt, questionUserPrompt } from "@/lib/evaluation/prompts";
 
 export const maxDuration = 300;

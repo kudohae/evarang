@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { AssemblyAI } from "assemblyai";
 import { apiError } from "@/lib/server/api-error";
 import { guard } from "@/lib/server/access";
@@ -63,8 +64,9 @@ export async function POST(request: Request) {
   if (audio.length === 0) return apiError(400, "녹음 파일이 비어 있습니다.", { kind: "invalid" });
   if (audio.length > MAX_BYTES) return apiError(413, "녹음 파일이 너무 큽니다.", { kind: "invalid" });
 
-  // The recording's key: transcribing the same recording again the same day is not counted twice.
-  const ref = request.headers.get("x-usage-ref")?.slice(0, 100) || crypto.randomUUID();
+  // The recording itself is the reference, so transcribing the same recording again the same day is not
+  // counted twice, and a client cannot reuse one reference for different recordings.
+  const ref = createHash("sha256").update(audio).digest("hex").slice(0, 40);
   try {
     await meter("transcribe", 1, ref);
   } catch (e) {

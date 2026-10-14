@@ -39,6 +39,8 @@ async function db() {
         UNIQUE (subject, action, ref, day)
       )`;
     await client`CREATE INDEX IF NOT EXISTS usage_events_day ON usage_events (subject, day)`;
+    // Requests made under one reference that day, so a reused reference cannot run without end.
+    await client`ALTER TABLE usage_events ADD COLUMN IF NOT EXISTS hits int NOT NULL DEFAULT 1`;
   })();
   try {
     await schema;
@@ -68,17 +70,18 @@ export async function meter(action: ActionId, units: number, ref: string): Promi
     const who = await subject();
     const client = await db();
     const rows = (await client`
-      SELECT COALESCE(SUM(units), 0)::float AS used, BOOL_OR(ref = ${ref}) AS counted
-      FROM usage_events WHERE subject = ${who.id} AND action = ${action} AND day = ${day}`) as { used: number; counted: boolean | null }[];
+      SELECT COALESCE(SUM(units), 0)::float AS used, BOOL_OR(ref = ${ref}) AS counted,
+             COALESCE(MAX(hits) FILTER (WHERE ref = ${ref}), 0)::int AS hits
+      FROM usage_events WHERE subject = ${who.id} AND action = ${action} AND day = ${day}`) as { used: number; counted: boolean | null; hits: number }[];
     const free = ACTIONS[action].freePerDay[who.member ? "member" : "anon"];
     const counted = Boolean(rows[0]?.counted);
-    verdict = decide(Number(rows[0]?.used ?? 0), units, free, counted);
+    verdict = decide(Number(rows[0]?.used ?? 0), units, free, counted, { hits: Number(rows[0]?.hits ?? 0), maxPerRef: ACTIONS[action].maxPerRef });
     // Paid credits will be a branch here: past the free allowance, take from the member's wallet.
-    if (verdict.ok && !counted) {
+    if (verdict.ok) {
       await client`
         INSERT INTO usage_events (subject, action, ref, day, units)
         VALUES (${who.id}, ${action}, ${ref}, ${day}, ${units})
-        ON CONFLICT DO NOTHING`;
+        ON CONFLICT (subject, action, ref, day) DO UPDATE SET hits = usage_events.hits + 1`;
     }
   } catch (e) {
     console.error("usage ledger failed:", e);

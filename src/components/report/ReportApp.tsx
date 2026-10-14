@@ -121,7 +121,7 @@ export function ReportApp({ id }: { id: string }) {
       try {
         const blob = await loadRecording(a.audioKey);
         if (!blob) throw new Error("녹음 파일이 이 브라우저에 없습니다.");
-        const r = await transcribeBlob(blob, a.durationMs, a.audioKey);
+        const r = await transcribeBlob(blob, a.durationMs);
         fallback ??= r.fallback;
         answers = answers.map((x) => (x.number === a.number ? { ...x, transcript: r.transcript, transcriptError: undefined } : x));
       } catch (e) {

@@ -42,32 +42,67 @@ npm run dev                  # http://localhost:3000
 ```
 src/
   app/                    페이지와 API 라우트
-    api/transcribe        녹음 → AssemblyAI (Universal-3.5 Pro, disfluencies: true)
-    api/evaluate/*        문항별 첨삭(5문항씩 묶음), 종합 판정
+    api/transcribe        녹음 → AssemblyAI (Universal-3.5 Pro, disfluencies: true), 실패하면 Gemini
+    api/feedback/answers  답변 피드백(렌즈별, 최대 8개씩)     api/feedback/overall  모의고사 종합 판정
     api/access            접근 코드 확인 → httpOnly 쿠키
     api/auth, api/account 가입·로그인·로그아웃, 회원정보 수정·탈퇴 (lib/server/auth.ts)
-    api/me                계정에 저장한 시험 기록과 녹음 (lib/server/user-exams.ts)
-    api/records           동의한 시험의 저장·녹음 업로드·삭제
+    api/me/docs           계정에 둔 기록(종류별)과 녹음 (lib/server/docs.ts)
+    api/me/usage          오늘 남은 무료 횟수 (lib/server/meter.ts)
+    api/records           예측 개선용 기록의 저장·녹음 업로드·삭제
     api/admin/*           관리자 화면용 목록, 기록, 녹음
-    api/cron/purge        보유 기간이 지난 기록 삭제 (vercel.json)
+    api/cron/purge        보유 기간이 지난 기록과 90일 지난 사용 기록 삭제 (vercel.json)
     privacy               개인정보 처리방침
+  components/AppShell     홈·보고서·회원·처리방침이 함께 쓰는 머리말
   components/exam/        시험 화면 (설문, 자가평가, 장비 점검, 문항, 재조정)
   components/report/      평가 보고서
+  lib/features.ts         기능 등록부 (홈 메뉴와 머리말이 읽음)
+  lib/domain/             약점 이름표 21개(skills), 시도·세션 모양, 모의고사 → 시도 어댑터
+  lib/feedback/           렌즈(무엇을 볼지), 프롬프트, 응답 스키마, 무료 모델 사다리
+  lib/capture/            답변 받기: 정책(시험/연습), 마이크, 녹음 단계, 저장 후 받아쓰기
+  lib/docs/               기록 저장: 종류 등록부, 브라우저 저장소, 계정 API, 동기화
+  lib/metering/           행동별 하루 무료 횟수, 한국 시간 날짜
   lib/content/            설문 항목, 자가평가 단계, 문항 은행 (설문 주제 63개, 돌발 주제 15개)
   lib/exam/compose.ts     출제 규칙
-  lib/evaluation/         평가 기준 프롬프트와 응답 스키마
   lib/server/llm.ts       모델 공급자별 호출 (Gemini, Groq)과 한도 판단
   lib/models.ts           평가 모델 순서
 ```
 
-녹음과 결과는 사용자의 브라우저(IndexedDB)에 저장됩니다. 서버에는 "예측 개선을 위한 저장"에 동의한 시험만 남습니다.
+녹음과 결과는 사용자의 브라우저(IndexedDB)에 저장됩니다. 서버에는 계정 저장이나 "예측 개선을 위한 저장"에 동의한 기록만 남습니다.
+
+## 시험(테스트)
+
+```bash
+npm run typecheck
+npm test            # Vitest: 이름표, 스키마, 렌즈, 사다리, 사용량, 저장소, 동기화 (fake-indexeddb)
+npm run test:e2e    # Playwright: 모의고사 흐름, 다시 듣기 5초, 보조 음성인식 안내, 공통 머리말
+```
+
+- e2e는 `next dev`를 3100번 포트로 띄우고 받아쓰기·평가 API를 가짜 응답으로 바꿉니다. 키나 DB가 필요 없습니다.
+- 개발 서버가 보는 폴더 안에 로그 파일을 쓰면서 e2e를 돌리면 페이지가 계속 다시 불러와질 수 있습니다. 로그는 저장소 밖에 쓰세요.
+
+## 사용량 한도
+
+돈이 드는 행동은 서버의 `meter()`를 거칩니다. 하루는 한국 시간 자정 기준이고, 같은 대상(시험, 녹음)은 하루 한 번만 셉니다. 그래서 한 시험의 첨삭 묶음, 종합 판정, 재시도, 모델 전환은 모두 평가 1번입니다.
+
+| 행동 | 비회원 | 회원 |
+|---|---|---|
+| 모의고사 평가 | 1 | 2 |
+| 답변 피드백 | 10 | 30 |
+| 구조 연습 피드백 | 30 | 100 |
+| 받아쓰기 | 40 | 120 |
+| 스토리 만들기 | 0 | 3 |
+
+- 회원은 계정으로, 비회원은 IP의 HMAC(`USAGE_SALT`) 해시 앞 32자로 셉니다. IP 자체는 저장하지 않습니다. 기록은 `usage_events` 표에 90일 남습니다.
+- 한도를 넘으면 429 `{ kind: "quota", remaining, resetAt }`과 "오늘 무료 모의고사 평가를 모두 썼습니다. 내일 0시에 다시 채워집니다." 같은 문구가 갑니다.
+- `DATABASE_URL`이 없으면 세지 않습니다. 사용 기록 DB가 잠시 실패해도 막지 않고 통과시킵니다.
+- 유료 크레딧은 `meter()` 안의 한 분기로 들어올 자리만 있습니다(`ACTIONS[*].credits`).
 
 ## 회원
 
 - **가입·로그인:** 이메일과 비밀번호. `DATABASE_URL`만 있으면 켜집니다(Blob은 필요 없음). 화면은 `/signup`, `/login`, `/account`(닉네임·이메일·비밀번호 변경, 로그아웃, 탈퇴).
 - **저장:** Postgres의 `users`, `sessions`, `auth_attempts` 표(처음 요청 때 자동 생성). 비밀번호는 scrypt 해시로만, 세션은 쿠키 값의 SHA-256만 저장합니다. 세션은 30일, 비밀번호를 바꾸면 다른 기기의 세션은 모두 끊깁니다.
 - **막아둔 것:** 다른 사이트에서 보낸 요청(Origin 검사), 이메일당 15분에 로그인 10회·IP당 50회, IP당 1시간에 가입 10회.
-- **계정에 시험 기록 저장:** 로그인한 회원이 한 번 동의하면(홈 화면 안내 또는 내 정보 → 시험 기록 저장), 기록을 `user_docs` 표(종류 `exam`·`session`·`note`·`story`)에, 녹음을 비공개 Blob `users/{회원}/{종류}/{기록}/{번호}`에 저장합니다. 첫 버전의 `user_exams` 표는 처음 요청 때 `user_docs`로 옮기고(여러 번 돌아도 안전), 그 녹음은 옛 경로 `users/{회원}/exams/{기록}/{문항}`을 그대로 씁니다. 그때 이 브라우저에 있던 기록도 함께 올립니다. 이후에는 보고서가 바뀔 때마다(평가, 실제 등급, 다시 받아쓰기) 다시 보냅니다. 브라우저가 작업본이고 계정은 그 사본입니다.
+- **계정에 시험 기록 저장:** 로그인한 회원이 한 번 동의하면(홈 화면 안내 또는 내 정보 → 시험 기록 저장), 기록을 `user_docs` 표(종류 `exam`·`session`·`note`·`story`)에, 녹음을 비공개 Blob `users/{회원}/{종류}/{기록}/{번호}`에 저장합니다. 동의하면 이 브라우저에 있던 기록도 함께 올리고, 이후에는 기록이 바뀔 때마다(평가, 실제 등급, 다시 받아쓰기) 1초 몰아서 다시 보냅니다. 브라우저가 작업본이고 계정은 그 사본입니다(`lib/docs/policy.ts`의 `local-first`). 첫 버전의 `user_exams` 표는 처음 요청 때 `user_docs`로 옮기고(여러 번 돌아도 안전), 그 녹음은 옛 경로 `users/{회원}/exams/{기록}/{문항}`을 그대로 씁니다.
 - **다른 기기:** 홈의 "지난 시험"에 계정의 기록이 함께 나오고, 보고서를 열면 계정에서 불러와 이 브라우저에 사본을 둡니다. 녹음은 재생할 때 계정에서 받아옵니다.
 - **삭제:** 저장을 끄면 계정의 기록과 녹음을 모두 지웁니다. 탈퇴하면 계정과 함께 지웁니다. 브라우저의 기록과 예측 개선용 기록은 따로입니다.
 - **아직 없는 것:** 비밀번호 찾기(메일 발송 필요), 이메일 인증, 소셜 로그인, 휴대폰·본인 인증, 기록 하나만 골라 계정에서 지우는 화면(API는 있음).

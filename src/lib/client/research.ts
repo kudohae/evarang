@@ -1,6 +1,6 @@
 "use client";
 
-import { getAudio } from "@/lib/client/db";
+import { loadRecording } from "@/lib/client/account-records";
 import type { ExamResult } from "@/lib/exam/result";
 
 export function newSecret(): string {
@@ -36,7 +36,7 @@ export async function syncResearch(r: ExamResult): Promise<NonNullable<ExamResul
 
     for (const a of r.answers) {
       if (research.uploaded.includes(a.number)) continue;
-      const blob = await getAudio(a.audioKey);
+      const blob = await loadRecording(a.audioKey);
       if (!blob?.size) {
         research.uploaded.push(a.number);
         continue;

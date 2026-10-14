@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Icon } from "@/components/ui";
 import { AnnotatedTranscript } from "@/components/report/Transcript";
-import { getAudio } from "@/lib/client/db";
+import { loadRecording } from "@/lib/client/account-records";
 import { resolveVoice, speak, useVoices, type Speech } from "@/lib/client/audio";
 import { TYPE_LABEL } from "@/lib/exam/compose";
 import type { QuestionFeedback } from "@/lib/evaluation/schema";
@@ -20,10 +20,10 @@ function AudioPlayer({ audioKey, fallbackSeconds }: { audioKey: string; fallback
 
   useEffect(() => {
     let u = "";
-    // Admin view passes "remote:<blob path>"; everyone else plays the copy kept in their own browser.
+    // Admin view passes "remote:<blob path>"; everyone else plays their own copy, from this browser or their account.
     const load = audioKey.startsWith("remote:")
       ? fetch(`/api/admin/audio?path=${encodeURIComponent(audioKey.slice(7))}`).then((r) => (r.ok ? r.blob() : undefined))
-      : getAudio(audioKey);
+      : loadRecording(audioKey);
     void load.then((b) => {
       if (b && b.size) {
         u = URL.createObjectURL(b);

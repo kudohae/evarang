@@ -5,6 +5,9 @@ import { useEffect, useState, type ReactNode } from "react";
 import { AuthShell, Field, FormError, send, useSubmit } from "@/components/account/parts";
 import { useConfig, useReloadConfig } from "@/components/AccessGate";
 import { Button, Spinner } from "@/components/ui";
+import { listAccountExams, setRecordsConsent } from "@/lib/client/account-records";
+import { allResults, putResult } from "@/lib/client/db";
+import type { ExamResult } from "@/lib/exam/result";
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
@@ -43,6 +46,14 @@ export function AccountPage() {
   const pass = useSubmit();
   const leave = useSubmit();
   const out = useSubmit();
+  const records = useSubmit();
+  const [stored, setStored] = useState<number | null>(null);
+  const keep = Boolean(user?.recordsConsent);
+
+  useEffect(() => {
+    if (!keep) return setStored(null);
+    void listAccountExams().then((l) => setStored(l.length), () => setStored(null));
+  }, [keep]);
 
   if (!config.auth) {
     return (
@@ -162,6 +173,55 @@ export function AccountPage() {
           </form>
         </Section>
 
+        <Section title="시험 기록 저장">
+          {keep ? (
+            <>
+              <p className="text-[14px] leading-relaxed text-ink-2">
+                시험 기록을 계정에 저장하고 있습니다{stored !== null ? ` (${stored}개)` : ""}. 다른 기기에서 로그인해도 지난 시험과 보고서를 볼 수 있습니다.
+              </p>
+              <div>
+                <Button
+                  variant="secondary"
+                  disabled={records.busy}
+                  onClick={() => {
+                    if (!window.confirm("저장을 끄면 계정에 저장한 시험 기록과 녹음을 모두 삭제합니다. 이 브라우저의 기록은 남습니다.")) return;
+                    void records.run(async () => {
+                      await setRecordsConsent(false);
+                      // Forget what was sent, so turning it on again uploads everything afresh.
+                      const local = await allResults<ExamResult>().catch(() => []);
+                      await Promise.all(local.filter((r) => r.account).map(({ account: _a, ...r }) => (void _a, putResult(r.id, r))));
+                      await reload();
+                    });
+                  }}
+                >
+                  {records.busy ? <Spinner /> : "저장 끄고 계정의 기록 삭제"}
+                </Button>
+              </div>
+            </>
+          ) : (
+            <>
+              <p className="text-[14px] leading-relaxed text-ink-2">
+                켜면 설문 답변, 답변 녹음, 받아쓴 글, 평가 결과, 입력한 실제 OPIc 등급을 계정에 저장합니다. 다른 기기에서도 볼 수 있고, 저장을 끄거나 탈퇴하면 바로 삭제합니다.
+              </p>
+              <div>
+                <Button
+                  variant="secondary"
+                  disabled={records.busy}
+                  onClick={() =>
+                    void records.run(async () => {
+                      await setRecordsConsent(true);
+                      await reload();
+                    })
+                  }
+                >
+                  {records.busy ? <Spinner /> : "동의하고 저장 켜기"}
+                </Button>
+              </div>
+            </>
+          )}
+          <FormError>{records.error}</FormError>
+        </Section>
+
         <Section title="로그아웃">
           <div>
             <Button
@@ -183,7 +243,8 @@ export function AccountPage() {
 
         <Section title="회원 탈퇴">
           <p className="text-[14px] leading-relaxed text-ink-2">
-            계정과 로그인 정보를 바로 삭제합니다. 되돌릴 수 없습니다. 이 브라우저에 저장된 시험 기록은 그대로 남고, 예측 개선용으로 저장한 기록은 각 보고서 아래에서 따로 삭제할 수 있습니다.
+            계정과 로그인 정보, 계정에 저장한 시험 기록과 녹음을 바로 삭제합니다. 되돌릴 수 없습니다. 이 브라우저에 저장된 기록은 그대로 남고, 예측 개선용으로 저장한 기록은 각 보고서 아래에서 따로
+            삭제할 수 있습니다.
           </p>
           <form
             className="flex flex-col gap-4"

@@ -1,10 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
-import { useConfig } from "@/components/AccessGate";
-import { Icon, Wordmark } from "@/components/ui";
-import { allResults } from "@/lib/client/db";
+import { useEffect, useRef, useState } from "react";
+import { useConfig, useReloadConfig } from "@/components/AccessGate";
+import { Button, Icon, Spinner, Wordmark } from "@/components/ui";
+import { accountSignature, listAccountExams, setRecordsConsent, syncToAccount, type AccountExam } from "@/lib/client/account-records";
+import { allResults, putResult } from "@/lib/client/db";
 import { latestEvaluation, type ExamResult } from "@/lib/exam/result";
 import { modelLabel } from "@/lib/models";
 
@@ -27,15 +28,116 @@ const DIFFERENCES = [
   },
 ];
 
+type Row = { id: string; createdAt: number; grade: string | null; startLevel: number | null; finalLevel: number | null; count: number | null; model: string | null };
+
+function fromLocal(r: ExamResult): Row {
+  const ev = latestEvaluation(r);
+  return { id: r.id, createdAt: r.createdAt, grade: ev?.overall?.grade ?? null, startLevel: r.startLevel, finalLevel: r.finalLevel, count: r.questions.length, model: ev?.modelId ?? null };
+}
+
+function fromAccount(e: AccountExam): Row {
+  return { id: e.id, createdAt: Date.parse(e.createdAt), grade: e.grade, startLevel: e.startLevel, finalLevel: e.finalLevel, count: e.questionCount, model: e.model };
+}
+
+const DISMISS_KEY = "evarang:records-prompt-dismissed";
+
+/** Asks a signed-in member, once, whether to keep test records in the account. */
+function RecordsPrompt({ onAgree }: { onAgree: () => Promise<void> }) {
+  const [hidden, setHidden] = useState(() => {
+    try {
+      return localStorage.getItem(DISMISS_KEY) === "1";
+    } catch {
+      return false;
+    }
+  });
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  if (hidden) return null;
+  return (
+    <section className="rise mt-12 rounded-panel border border-line bg-surface px-5 py-5 shadow-panel md:px-6">
+      <h2 className="text-[16px] font-semibold">시험 기록을 계정에 저장할까요?</h2>
+      <p className="mt-2 text-[14px] leading-[1.7] text-ink-2">
+        다른 기기에서도 지난 시험과 보고서를 볼 수 있고, 이 브라우저 데이터를 지워도 남습니다. 지금 이 브라우저에 있는 기록도 함께 저장합니다.
+      </p>
+      <dl className="mt-3 grid grid-cols-[64px_1fr] gap-x-3 gap-y-1 text-[13px]">
+        <dt className="text-ink-3">항목</dt>
+        <dd className="text-ink">설문 답변, 답변 녹음, 받아쓴 글, 평가 결과, 입력한 실제 OPIc 등급</dd>
+        <dt className="text-ink-3">보유 기간</dt>
+        <dd className="text-ink">저장을 끄거나 탈퇴할 때까지. 그때 바로 삭제합니다.</dd>
+      </dl>
+      {error && <p className="mt-3 text-[14px] text-pen-ink">{error}</p>}
+      <div className="mt-4 flex flex-wrap gap-2">
+        <Button
+          disabled={busy}
+          onClick={async () => {
+            setBusy(true);
+            setError("");
+            try {
+              await onAgree();
+            } catch (e) {
+              setError((e as Error).message);
+            } finally {
+              setBusy(false);
+            }
+          }}
+        >
+          {busy ? <Spinner /> : "동의하고 저장하기"}
+        </Button>
+        <Button
+          variant="quiet"
+          onClick={() => {
+            try {
+              localStorage.setItem(DISMISS_KEY, "1");
+            } catch {}
+            setHidden(true);
+          }}
+        >
+          나중에
+        </Button>
+      </div>
+    </section>
+  );
+}
+
 export function Home() {
   const config = useConfig();
+  const reload = useReloadConfig();
   const [results, setResults] = useState<ExamResult[] | null>(null);
+  const [remote, setRemote] = useState<AccountExam[]>([]);
+  const [uploading, setUploading] = useState(0);
+  const keep = Boolean(config.user?.recordsConsent);
 
   useEffect(() => {
     void allResults<ExamResult>()
       .then((list) => setResults(list.sort((a, b) => b.createdAt - a.createdAt)))
       .catch(() => setResults([]));
   }, []);
+
+  useEffect(() => {
+    if (!keep) return setRemote([]);
+    void listAccountExams().then(setRemote, () => setRemote([]));
+  }, [keep]);
+
+  // Tests in this browser that the account copy does not match yet go up one at a time.
+  const pushing = useRef(false);
+  useEffect(() => {
+    if (!keep || !results || pushing.current) return;
+    const pending = results.filter((r) => r.account?.signature !== accountSignature(r));
+    if (!pending.length) return;
+    pushing.current = true;
+    void (async () => {
+      for (let i = 0; i < pending.length; i++) {
+        setUploading(pending.length - i);
+        const account = await syncToAccount(pending[i]);
+        await putResult(pending[i].id, { ...pending[i], account }).catch(() => {});
+      }
+      setUploading(0);
+      setRemote(await listAccountExams().catch(() => []));
+    })();
+  }, [keep, results]);
+
+  const local = (results ?? []).map(fromLocal);
+  const rows = [...local, ...remote.filter((e) => !local.some((l) => l.id === e.id)).map(fromAccount)].sort((a, b) => b.createdAt - a.createdAt);
 
   return (
     <div className="min-h-dvh">
@@ -76,22 +178,33 @@ export function Home() {
           {!config.stt && <p className="mt-6 text-[14px] text-pen-ink">서버에 음성인식 키가 설정되지 않아 지금은 답변을 받아쓸 수 없습니다.</p>}
         </section>
 
-        {results && results.length > 0 && (
+        {config.user && !keep && (
+          <RecordsPrompt
+            onAgree={async () => {
+              await setRecordsConsent(true);
+              await reload();
+            }}
+          />
+        )}
+
+        {rows.length > 0 && (
           <section className="mt-24">
-            <h2 className="text-[15px] font-semibold text-ink-2">지난 시험</h2>
+            <h2 className="flex items-baseline justify-between gap-4 text-[15px] font-semibold text-ink-2">
+              지난 시험
+              {uploading > 0 && <span className="text-[13px] font-normal text-ink-3">계정에 저장하는 중 · {uploading}개 남음</span>}
+            </h2>
             <ul className="mt-4">
-              {results.slice(0, 12).map((r) => {
-                const ev = latestEvaluation(r);
+              {rows.slice(0, 12).map((r) => {
                 return (
                   <li key={r.id} className="border-t border-line first:border-t-0">
                     <Link href={`/results/${r.id}`} className="group flex items-center gap-5 py-4">
-                      <span className="tabular w-14 shrink-0 text-[22px] font-bold tracking-[-0.02em]">{ev?.overall?.grade ?? "—"}</span>
+                      <span className="tabular w-14 shrink-0 text-[22px] font-bold tracking-[-0.02em]">{r.grade ?? "—"}</span>
                       <span className="min-w-0 flex-1">
                         <span className="block text-[15px] font-medium">
                           {new Date(r.createdAt).toLocaleDateString("ko-KR", { year: "numeric", month: "long", day: "numeric" })}
                         </span>
                         <span className="block text-[13px] text-ink-3">
-                          난이도 {r.startLevel}→{r.finalLevel} · {r.questions.length}문항 · {ev ? modelLabel(ev.modelId) : "평가 전"}
+                          난이도 {r.startLevel ?? "?"}→{r.finalLevel ?? "?"} · {r.count ?? "?"}문항 · {r.model ? modelLabel(r.model) : "평가 전"}
                         </span>
                       </span>
                       <Icon name="arrow" className="size-4 text-ink-3 transition-transform group-hover:translate-x-0.5 group-hover:text-ink" />
@@ -120,7 +233,10 @@ export function Home() {
 
         <footer className="mt-20 border-t border-line pt-6 text-[13px] leading-relaxed text-ink-3">
           <p>예상 등급은 공식 OPIc 결과가 아닙니다. 발음은 평가하지 않습니다.</p>
-          <p>녹음과 결과는 이 브라우저에 저장됩니다. 받아쓰기와 평가를 위해 녹음과 받아쓴 글이 음성인식·평가 서비스로 전송되고, 예측 개선용 저장에 동의한 경우에만 서버에 보관됩니다.</p>
+          <p>
+            녹음과 결과는 이 브라우저에 저장됩니다. 받아쓰기와 평가를 위해 녹음과 받아쓴 글이 음성인식·평가 서비스로 전송되고, 계정 저장이나 예측 개선용 저장에 동의한 경우에만 서버에
+            보관됩니다.
+          </p>
           <p className="mt-2">
             <a href="/privacy" className="underline underline-offset-4 hover:text-ink-2">
               개인정보 처리방침

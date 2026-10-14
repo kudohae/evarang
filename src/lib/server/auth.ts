@@ -14,7 +14,7 @@ const SESSION_DAYS = 30;
 /** Version of the member consent text shown at sign-up; bump it when that text changes. */
 export const MEMBER_CONSENT_VERSION = "2026-10-14";
 
-export type User = { id: string; email: string; nickname: string; createdAt: string };
+export type User = { id: string; email: string; nickname: string; createdAt: string; recordsConsent: boolean };
 
 export class AuthError extends Error {
   constructor(
@@ -34,7 +34,8 @@ export function authConfigured(): boolean {
   return Boolean(databaseUrl());
 }
 
-async function sql(): Promise<NeonQueryFunction<false, false>> {
+/** The accounts database, with its tables created on first use. Other account features build on it. */
+export async function sql(): Promise<NeonQueryFunction<false, false>> {
   if (!databaseUrl()) throw new AuthError("회원 기능이 아직 설정되지 않았습니다.", 503);
   client ??= neonClient();
   schema ??= (async () => {
@@ -56,6 +57,8 @@ async function sql(): Promise<NeonQueryFunction<false, false>> {
         expires_at  timestamptz NOT NULL
       )`;
     await client!`CREATE INDEX IF NOT EXISTS sessions_user ON sessions (user_id)`;
+    // Set when the member agrees to keep their test records in the account.
+    await client!`ALTER TABLE users ADD COLUMN IF NOT EXISTS records_consent_at timestamptz`;
     await client!`
       CREATE TABLE IF NOT EXISTS auth_attempts (
         key       text PRIMARY KEY,
@@ -183,11 +186,19 @@ export async function currentUser(): Promise<User | null> {
   if (!token) return null;
   const db = await sql();
   const rows = (await db`
-    SELECT u.id, u.email, u.nickname, u.created_at
+    SELECT u.id, u.email, u.nickname, u.created_at, u.records_consent_at
     FROM sessions s JOIN users u ON u.id = s.user_id
-    WHERE s.token_hash = ${tokenHash(token)} AND s.expires_at > now()`) as { id: string; email: string; nickname: string; created_at: string }[];
+    WHERE s.token_hash = ${tokenHash(token)} AND s.expires_at > now()`) as {
+    id: string;
+    email: string;
+    nickname: string;
+    created_at: string;
+    records_consent_at: string | null;
+  }[];
   const r = rows[0];
-  return r ? { id: r.id, email: r.email, nickname: r.nickname, createdAt: new Date(r.created_at).toISOString() } : null;
+  return r
+    ? { id: r.id, email: r.email, nickname: r.nickname, createdAt: new Date(r.created_at).toISOString(), recordsConsent: Boolean(r.records_consent_at) }
+    : null;
 }
 
 export async function requireUser(): Promise<User> {
@@ -277,19 +288,23 @@ export async function changePassword(user: User, currentPassword: string, newPas
   await startSession(user.id);
 }
 
-/** Withdrawal: the account and its sessions are deleted at once. */
-export async function deleteAccount(user: User, password: string): Promise<void> {
+/** Withdrawal: `cleanup` removes what hangs off the account (stored recordings), then the account and its sessions go. */
+export async function deleteAccount(user: User, password: string, cleanup: () => Promise<void>): Promise<void> {
   await confirmPassword(user, password);
+  await cleanup();
   const db = await sql();
   await db`DELETE FROM users WHERE id = ${user.id}`;
   await db`DELETE FROM auth_attempts WHERE key = ${`confirm:${user.id}`}`;
   (await cookies()).delete(SESSION_COOKIE);
 }
 
-/** Wraps an account route: same-origin check, AuthError → JSON response, anything else → 502. */
-export async function handle(run: () => Promise<Response>): Promise<Response> {
+/**
+ * Wraps an account route: same-origin check for anything that changes data, AuthError → JSON response,
+ * anything else → 502. Browsers send no Origin header on same-origin GETs, so reads skip the check.
+ */
+export async function handle(run: () => Promise<Response>, { read = false }: { read?: boolean } = {}): Promise<Response> {
   try {
-    await assertSameOrigin();
+    if (!read) await assertSameOrigin();
     return await run();
   } catch (e) {
     if (e instanceof AuthError) return Response.json({ error: e.message }, { status: e.status });

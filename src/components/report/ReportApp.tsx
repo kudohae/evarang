@@ -7,7 +7,8 @@ import { Report } from "@/components/report/Report";
 import { WaitingRoom } from "@/components/report/WaitingRoom";
 import { Button, Icon, Spinner, Wordmark } from "@/components/ui";
 import { evaluate, type Progress } from "@/lib/client/evaluate";
-import { getAudio, getResult, putResult } from "@/lib/client/db";
+import { getResult, putResult } from "@/lib/client/db";
+import { accountSignature, loadFromAccount, loadRecording, syncToAccount } from "@/lib/client/account-records";
 import { transcribeBlob } from "@/lib/client/transcribe";
 import { deleteResearch, researchSignature, syncResearch, wantsResearch } from "@/lib/client/research";
 import { FallbackNotice } from "@/components/FallbackNotice";
@@ -51,12 +52,19 @@ export function ReportApp({ id }: { id: string }) {
     await putResult(next.id, next);
   };
 
+  const signedIn = Boolean(config.user);
   useEffect(() => {
-    void getResult<ExamResult>(id).then((r) => {
-      latest.current = r ?? null;
-      setResult(r ?? null);
-    });
-  }, [id]);
+    void (async () => {
+      let r = (await getResult<ExamResult>(id).catch(() => undefined)) ?? null;
+      // Not in this browser: a member may have it in their account. Keep a local copy so edits work as usual.
+      if (!r && signedIn) {
+        r = await loadFromAccount(id).catch(() => null);
+        if (r) await putResult(r.id, r).catch(() => {});
+      }
+      latest.current = r;
+      setResult(r);
+    })();
+  }, [id, signedIn]);
 
   const run = async () => {
     const current = latest.current;
@@ -98,6 +106,19 @@ export function ReportApp({ id }: { id: string }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [result]);
 
+  // Account copy: same rule, for members who keep their records in the account.
+  const keepInAccount = Boolean(config.user?.recordsConsent);
+  const accountSyncing = useRef("");
+  useEffect(() => {
+    if (!result || !keepInAccount) return;
+    const sig = accountSignature(result);
+    if (result.account?.signature === sig && !result.account.error) return;
+    if (accountSyncing.current === sig) return;
+    accountSyncing.current = sig;
+    void syncToAccount(result).then((account) => save((r) => ({ ...r, account })));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [result, keepInAccount]);
+
   const removeResearch = async () => {
     if (!result) return;
     await deleteResearch(result);
@@ -116,7 +137,7 @@ export function ReportApp({ id }: { id: string }) {
     const errors: string[] = [];
     for (const a of result.answers.filter((x) => !x.transcript)) {
       try {
-        const blob = await getAudio(a.audioKey);
+        const blob = await loadRecording(a.audioKey);
         if (!blob) throw new Error("녹음 파일이 이 브라우저에 없습니다.");
         const r = await transcribeBlob(blob, a.durationMs);
         fallback ??= r.fallback;
@@ -153,7 +174,15 @@ export function ReportApp({ id }: { id: string }) {
       <Shell>
         <main className="mx-auto max-w-[560px] px-5 pt-24">
           <h1 className="text-[22px] font-bold">결과를 찾을 수 없습니다</h1>
-          <p className="mt-2 text-[15px] text-ink-2">시험 기록은 응시한 브라우저에만 저장됩니다. 다른 기기나 브라우저에서는 열리지 않습니다.</p>
+          <p className="mt-2 text-[15px] leading-relaxed text-ink-2">
+            {config.user?.recordsConsent
+              ? "이 브라우저에도, 계정에도 없는 기록입니다."
+              : config.user
+                ? "이 브라우저에 없는 기록입니다. 계정에 시험 기록을 저장하도록 켜두면 다른 기기에서도 열 수 있습니다."
+                : config.auth
+                  ? "이 브라우저에 없는 기록입니다. 계정에 저장한 기록이라면 로그인한 뒤 다시 열어 보세요."
+                  : "시험 기록은 응시한 브라우저에만 저장됩니다. 다른 기기나 브라우저에서는 열리지 않습니다."}
+          </p>
         </main>
       </Shell>
     );

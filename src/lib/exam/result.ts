@@ -30,6 +30,8 @@ export type ExamResult = {
   consent?: { version: string; research: boolean; at: number };
   /** Local bookkeeping for the research copy. The secret never leaves this browser except to prove ownership. */
   research?: { secret: string; uploaded: number[]; syncedAt?: number; deleted?: boolean; error?: string };
+  /** Local bookkeeping for the copy kept in the member's account. */
+  account?: { uploaded: number[]; signature?: string; syncedAt?: number; error?: string };
 };
 
 export const CONSENT_VERSION = "2026-10-14";

@@ -11,7 +11,7 @@ export type Config = {
   research: boolean;
   /** Accounts are available (a database is configured). */
   auth: boolean;
-  user: { email: string; nickname: string; createdAt: string } | null;
+  user: { email: string; nickname: string; createdAt: string; recordsConsent: boolean } | null;
   models: { id: string; available: boolean }[];
 };
 

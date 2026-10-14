@@ -17,7 +17,7 @@ export async function GET() {
     hasAccess: ok,
     research: storageConfigured(),
     auth: authConfigured(),
-    user: user && { email: user.email, nickname: user.nickname, createdAt: user.createdAt },
+    user: user && { email: user.email, nickname: user.nickname, createdAt: user.createdAt, recordsConsent: user.recordsConsent },
     // Which half of the storage setup is missing, for diagnosing a hidden research consent box. Names only, no values.
     storage: {
       database: Boolean(process.env.DATABASE_URL || process.env.POSTGRES_URL),

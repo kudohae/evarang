@@ -1,6 +1,6 @@
 import { guard } from "@/lib/server/access";
 import { deleteAccount, handle, requireUser, updateProfile } from "@/lib/server/auth";
-import { removeAllExams } from "@/lib/server/user-exams";
+import { removeAllDocs } from "@/lib/server/docs";
 
 /** Edits the nickname and/or email. Changing the email needs the current password. */
 export async function PATCH(request: Request) {
@@ -25,7 +25,7 @@ export async function DELETE(request: Request) {
   return handle(async () => {
     const user = await requireUser();
     const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
-    await deleteAccount(user, String(body.password ?? ""), () => removeAllExams(user.id));
+    await deleteAccount(user, String(body.password ?? ""), () => removeAllDocs(user.id));
     return Response.json({ ok: true });
   });
 }

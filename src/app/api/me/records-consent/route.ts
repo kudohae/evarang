@@ -1,6 +1,6 @@
 import { guard } from "@/lib/server/access";
 import { handle, requireUser } from "@/lib/server/auth";
-import { setRecordsConsent } from "@/lib/server/user-exams";
+import { setRecordsConsent } from "@/lib/server/docs";
 
 /** Turns account storage of test records on, or off (which deletes what was stored). */
 export async function POST(request: Request) {

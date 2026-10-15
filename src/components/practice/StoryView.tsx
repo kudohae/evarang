@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useConfig } from "@/components/AccessGate";
 import { AppShell } from "@/components/AppShell";
 import { PracticeRunner } from "@/components/practice/PracticeRunner";
+import { useToast } from "@/components/Toast";
 import { attemptAnswer, attemptQuestion, Block, formatDay, MicGate, Page, PageHead } from "@/components/practice/parts";
 import { QuestionDetail } from "@/components/report/QuestionDetail";
 import { BackButton, Button, Icon, Spinner } from "@/components/ui";
@@ -23,6 +24,7 @@ const PART_TITLE: Record<string, string> = { opening: "바로 답하기", reason
 /** One story: the text (editable), its skeleton, phrases to keep, and speaking practice on its topics. */
 export function StoryView({ id }: { id: string }) {
   const config = useConfig();
+  const toast = useToast();
   const { level } = useAttempts();
   const voices = useVoices();
   const voice = useMemo(() => resolveVoice(voices), [voices]);
@@ -103,6 +105,7 @@ export function StoryView({ id }: { id: string }) {
                   onClick={() => {
                     void save({ ...(latest.current ?? story), story: draft.trim() });
                     setEditing(false);
+                    toast("이야기를 저장했습니다");
                   }}
                   disabled={!draft.trim()}
                 >

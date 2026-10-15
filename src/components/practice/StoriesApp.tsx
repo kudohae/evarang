@@ -7,15 +7,13 @@ import { useConfig } from "@/components/AccessGate";
 import { AppShell } from "@/components/AppShell";
 import { FormError } from "@/components/account/parts";
 import { Block, formatDay, HistoryRow, Page, PageHead } from "@/components/practice/parts";
-import { Button, Spinner } from "@/components/ui";
+import { Button, Chip, Spinner } from "@/components/ui";
 import { TOPICS } from "@/lib/content/topics";
 import { useDocList } from "@/lib/docs/useDocList";
 import { newId } from "@/lib/exam/result";
 import { generateStory } from "@/lib/stories/request";
 import { STORY_LEVELS, type StoryDoc, type StoryLevel } from "@/lib/stories/schema";
 
-const chip = (on: boolean) =>
-  `rounded-full border px-4 py-2 text-[14px] font-medium transition-colors ${on ? "border-ink bg-ink text-surface" : "border-line-strong bg-surface text-ink hover:border-ink"}`;
 
 const MEMO_HINT = "예: 작년 여름에 친구 두 명과 부산에 갔다. 해운대에서 수영하고 밤에 시장에서 회를 먹었다. 비가 와서 계획이 틀어졌지만 오히려 카페에서 오래 이야기해서 더 기억에 남는다.";
 
@@ -103,17 +101,17 @@ export function StoriesApp() {
                 <p className="mb-2 mt-3 text-[13px] text-ink-3">서베이 주제</p>
                 <div className="flex flex-wrap gap-2">
                   {surveyTopics.map((t) => (
-                    <button key={t.id} type="button" aria-pressed={topics.includes(t.id)} className={chip(topics.includes(t.id))} onClick={() => toggle(t.id)}>
+                    <Chip key={t.id} on={topics.includes(t.id)} onClick={() => toggle(t.id)}>
                       {t.label}
-                    </button>
+                    </Chip>
                   ))}
                 </div>
                 <p className="mb-2 mt-5 text-[13px] text-ink-3">돌발 주제</p>
                 <div className="flex flex-wrap gap-2">
                   {randomTopics.map((t) => (
-                    <button key={t.id} type="button" aria-pressed={topics.includes(t.id)} className={chip(topics.includes(t.id))} onClick={() => toggle(t.id)}>
+                    <Chip key={t.id} on={topics.includes(t.id)} onClick={() => toggle(t.id)}>
                       {t.label}
-                    </button>
+                    </Chip>
                   ))}
                 </div>
               </fieldset>
@@ -138,9 +136,9 @@ export function StoriesApp() {
                 <legend className="text-[14px] font-medium text-ink-2">목표 등급</legend>
                 <div className="mt-3 flex flex-wrap gap-2">
                   {STORY_LEVELS.map((l) => (
-                    <button key={l} type="button" aria-pressed={level === l} className={chip(level === l)} onClick={() => setLevel(l)}>
+                    <Chip key={l} on={level === l} onClick={() => setLevel(l)}>
                       {l}
-                    </button>
+                    </Chip>
                   ))}
                 </div>
               </fieldset>

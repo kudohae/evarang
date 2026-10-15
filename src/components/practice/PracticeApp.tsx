@@ -5,7 +5,7 @@ import { useMemo, useRef, useState } from "react";
 import { AppShell } from "@/components/AppShell";
 import { PracticeRunner } from "@/components/practice/PracticeRunner";
 import { Block, formatDay, HistoryRow, MicGate, Page, PageHead } from "@/components/practice/parts";
-import { BackButton, Button } from "@/components/ui";
+import { BackButton, Button, Chip } from "@/components/ui";
 import { TOPICS, topicById } from "@/lib/content/topics";
 import type { Attempt } from "@/lib/domain/attempt";
 import { skillProfile, suggestLens } from "@/lib/domain/profile";
@@ -23,7 +23,6 @@ import type { ExamQuestion, QuestionType } from "@/lib/types";
 
 type Setting = { mode: "type"; type: QuestionType } | { mode: "topic"; topicId: string };
 
-const chip = "rounded-full border border-line-strong bg-surface px-4 py-2 text-[14px] font-medium text-ink transition-colors hover:border-ink";
 
 function titleOf(s: Setting): string {
   return s.mode === "type" ? TYPE_LABEL[s.type] : `${topicById(s.topicId)?.label ?? "주제"} 주제`;
@@ -151,9 +150,9 @@ export function PracticeApp() {
         <Block title="문항별">
           <div className="flex flex-wrap gap-2">
             {PRACTICE_TYPES.map((t) => (
-              <button key={t} type="button" className={chip} onClick={() => start({ mode: "type", type: t })}>
+              <Chip key={t} on={false} onClick={() => start({ mode: "type", type: t })}>
                 {TYPE_LABEL[t]}
-              </button>
+              </Chip>
             ))}
           </div>
         </Block>
@@ -162,17 +161,17 @@ export function PracticeApp() {
           <p className="mb-3 text-[13px] text-ink-3">서베이 주제</p>
           <div className="flex flex-wrap gap-2">
             {surveyTopics.map((t) => (
-              <button key={t.id} type="button" className={chip} onClick={() => start({ mode: "topic", topicId: t.id })}>
+              <Chip key={t.id} on={false} onClick={() => start({ mode: "topic", topicId: t.id })}>
                 {t.label}
-              </button>
+              </Chip>
             ))}
           </div>
           <p className="mb-3 mt-6 text-[13px] text-ink-3">돌발 주제</p>
           <div className="flex flex-wrap gap-2">
             {randomTopics.map((t) => (
-              <button key={t.id} type="button" className={chip} onClick={() => start({ mode: "topic", topicId: t.id })}>
+              <Chip key={t.id} on={false} onClick={() => start({ mode: "topic", topicId: t.id })}>
                 {t.label}
-              </button>
+              </Chip>
             ))}
           </div>
         </Block>

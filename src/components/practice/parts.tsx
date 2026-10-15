@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { Button, Spinner } from "@/components/ui";
+import { Button, Icon, Spinner } from "@/components/ui";
 import { topicById } from "@/lib/content/topics";
 import type { Attempt } from "@/lib/domain/attempt";
 import { useMicrophone } from "@/lib/capture/useMicrophone";
@@ -88,9 +88,10 @@ export function formatDay(at: number): string {
 export function HistoryRow({ href, title, meta }: { href: string; title: string; meta: string }) {
   return (
     <li className="border-b border-line">
-      <Link href={href} className="flex items-baseline justify-between gap-4 py-4 hover:text-ink">
+      <Link href={href} className="group -mx-3 flex items-center justify-between gap-4 rounded-ctl px-3 py-4 transition-[background-color,transform] duration-150 hover:bg-wash active:scale-[0.995]">
         <span className="min-w-0 flex-1 truncate text-[15px] font-medium">{title}</span>
         <span className="shrink-0 text-[13px] text-ink-3">{meta}</span>
+        <Icon name="chevron" className="size-4 shrink-0 text-ink-3 transition-transform duration-150 group-hover:translate-x-0.5" />
       </Link>
     </li>
   );

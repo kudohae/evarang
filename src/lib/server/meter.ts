@@ -3,6 +3,7 @@ import { headers } from "next/headers";
 import { ACTION_IDS, ACTIONS, quotaMessage, type ActionId } from "@/lib/metering/actions";
 import { kstDay, nextKstMidnight } from "@/lib/metering/day";
 import { decide } from "@/lib/metering/decide";
+import { isUnlimited } from "@/lib/metering/unlimited";
 import { currentUser } from "@/lib/server/auth";
 import { databaseUrl, neonClient } from "@/lib/server/sql";
 
@@ -52,9 +53,9 @@ async function db() {
 }
 
 /** Members are counted by account, everyone else by a keyed hash of their IP address (never the address itself). */
-async function subject(): Promise<{ id: string; member: boolean }> {
+async function subject(): Promise<{ id: string; member: boolean; unlimited?: boolean }> {
   const user = await currentUser();
-  if (user) return { id: `u:${user.id}`, member: true };
+  if (user) return { id: `u:${user.id}`, member: true, unlimited: isUnlimited(user.email, process.env.UNLIMITED_EMAILS) };
   const h = await headers();
   const ip = h.get("x-forwarded-for")?.split(",")[0]?.trim() || h.get("x-real-ip") || "unknown";
   const salt = process.env.USAGE_SALT || databaseUrl() || "";
@@ -76,6 +77,8 @@ export async function meter(action: ActionId, units: number, ref: string): Promi
     const free = ACTIONS[action].freePerDay[who.member ? "member" : "anon"];
     const counted = Boolean(rows[0]?.counted);
     verdict = decide(Number(rows[0]?.used ?? 0), units, free, counted, { hits: Number(rows[0]?.hits ?? 0), maxPerRef: ACTIONS[action].maxPerRef });
+    // Members on UNLIMITED_EMAILS are still recorded, never stopped.
+    if (who.unlimited) verdict = { ok: true, remaining: verdict.remaining };
     // Paid credits will be a branch here: past the free allowance, take from the member's wallet.
     if (verdict.ok) {
       await client`

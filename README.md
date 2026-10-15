@@ -94,6 +94,7 @@ npm run test:e2e    # Playwright: 모의고사 흐름, 다시 듣기 5초, 보�
 
 - 회원은 계정으로, 비회원은 IP의 HMAC(`USAGE_SALT`) 해시 앞 32자로 셉니다. IP 자체는 저장하지 않습니다. 기록은 `usage_events` 표에 90일 남습니다.
 - 한도를 넘으면 429 `{ kind: "quota", remaining, resetAt }`과 "오늘 무료 모의고사 평가를 모두 썼습니다. 내일 0시에 다시 채워집니다." 같은 문구가 갑니다.
+- `UNLIMITED_EMAILS`(쉼표로 구분)에 있는 회원은 로그인한 상태에서 한도 없이 씁니다. 사용 기록은 남습니다.
 - `DATABASE_URL`이 없으면 세지 않습니다. 사용 기록 DB가 잠시 실패해도 막지 않고 통과시킵니다.
 - 유료 크레딧은 `meter()` 안의 한 분기로 들어올 자리만 있습니다(`ACTIONS[*].credits`).
 

@@ -23,7 +23,7 @@ export const FEATURES: Feature[] = [
     description: "실제 순서 그대로 12~15문항. 끝나면 예상 등급과 문항별 첨삭을 받습니다.",
     meta: "약 60분 · 마이크 필요",
   },
-  { id: "notes", label: "첨삭노트", href: "/notes", status: "soon", description: "모의고사에서 고친 표현을 모아, 소리 내어 다시 말하며 복습합니다." },
+  { id: "notes", label: "첨삭노트", href: "/notes", status: "open", description: "모의고사에서 고친 표현을 모아, 소리 내어 다시 말하며 복습합니다." },
   {
     id: "practice",
     label: "맞춤형 연습",

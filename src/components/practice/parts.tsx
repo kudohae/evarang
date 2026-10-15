@@ -36,8 +36,11 @@ export function Page({ children }: { children: ReactNode }) {
   return <main className="mx-auto w-full max-w-[720px] px-5 pb-24">{children}</main>;
 }
 
-/** The microphone, asked for on a click (browsers require one) and kept for the whole page. */
-export function MicGate({ children }: { children: (stream: MediaStream) => ReactNode }) {
+/**
+ * The microphone, asked for on a click (browsers require one) and kept for the whole page.
+ * `alt`: another way forward shown under the button (e.g. "마이크 없이 하기").
+ */
+export function MicGate({ children, alt }: { children: (stream: MediaStream) => ReactNode; alt?: ReactNode }) {
   const mic = useMicrophone();
   if (mic.stream) return <>{children(mic.stream)}</>;
   return (
@@ -53,6 +56,7 @@ export function MicGate({ children }: { children: (stream: MediaStream) => React
           마이크를 사용할 수 없습니다. 브라우저 주소창의 권한 설정에서 마이크를 허용한 뒤 다시 시도하세요.
         </p>
       )}
+      {alt && <div className="mt-4">{alt}</div>}
     </div>
   );
 }

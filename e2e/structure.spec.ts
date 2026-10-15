@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { blockFonts, connectMic, mockFeedback, mockTranscribe } from "./fixtures";
+import { blockFonts, connectMic, keepMicStream, micState, mockFeedback, mockTranscribe } from "./fixtures";
 
 test.beforeEach(async ({ page }) => {
   await blockFonts(page);
@@ -58,4 +58,20 @@ test("the microphone stays connected across questions and pages", async ({ page 
   await page.getByRole("button", { name: "묘사", exact: true }).click();
   await expect(page.getByRole("button", { name: "질문 듣기" })).toBeVisible();
   await expect(page.getByRole("button", { name: "마이크 연결" })).toHaveCount(0);
+});
+
+test("the microphone is let go a while after leaving the screens that record", async ({ page }) => {
+  await page.clock.install();
+  await keepMicStream(page);
+  await page.goto("/structure");
+  await page.getByRole("button", { name: "질문 받기" }).click();
+  await connectMic(page);
+  await expect(part(page, "두괄식").getByRole("button", { name: "녹음" })).toBeVisible();
+  expect(await micState(page)).toBe("live");
+  await page.getByRole("banner").getByRole("link", { name: "스토리뱅크" }).click();
+  await expect(page.getByRole("heading", { name: "스토리뱅크" })).toBeVisible();
+  await page.clock.fastForward(30_000);
+  expect(await micState(page)).toBe("live");
+  await page.clock.fastForward(20_000);
+  await expect.poll(() => micState(page)).toBe("ended");
 });

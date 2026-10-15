@@ -40,14 +40,14 @@ export function Page({ children }: { children: ReactNode }) {
 
 /**
  * The microphone, asked for on a click (browsers require one) and kept for the whole page.
- * `alt`: another way forward shown under the button (e.g. "마이크 없이 하기").
+ * `alt`: another way forward shown under the button (e.g. "마이크 없이 하기"). `message`: why it is asked.
  */
-export function MicGate({ children, alt }: { children: (stream: MediaStream) => ReactNode; alt?: ReactNode }) {
+export function MicGate({ children, alt, message = "답변을 녹음하려면 마이크가 필요합니다." }: { children: (stream: MediaStream) => ReactNode; alt?: ReactNode; message?: ReactNode }) {
   const mic = useMicrophone();
   if (mic.stream) return <>{children(mic.stream)}</>;
   return (
     <div className="rounded-panel border border-line bg-surface px-6 py-8 text-center shadow-panel">
-      <p className="text-[15px] leading-relaxed text-ink-2">답변을 녹음하려면 마이크가 필요합니다.</p>
+      <p className="text-[15px] leading-relaxed text-ink-2">{message}</p>
       <div className="mt-5 flex justify-center">
         <Button onClick={() => void mic.request()} disabled={mic.status === "asking"}>
           {mic.status === "asking" ? <Spinner /> : "마이크 연결"}

@@ -114,3 +114,19 @@ export async function connectMic(page: Page) {
   await page.waitForTimeout(300);
   if (await button.isVisible()) await button.click();
 }
+
+/** Keeps the last microphone stream the page got on `window.__mic`, so a test can look at or end it. */
+export async function keepMicStream(page: Page) {
+  await page.addInitScript(() => {
+    const get = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
+    navigator.mediaDevices.getUserMedia = async (c) => {
+      const s = await get(c);
+      (window as unknown as { __mic: MediaStream }).__mic = s;
+      return s;
+    };
+  });
+}
+
+export async function micState(page: Page): Promise<string | null> {
+  return page.evaluate(() => (window as unknown as { __mic?: MediaStream }).__mic?.getAudioTracks()[0]?.readyState ?? null);
+}

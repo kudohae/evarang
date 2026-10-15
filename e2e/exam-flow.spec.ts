@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { blockFonts, connectMic, mockFeedback, mockTranscribe } from "./fixtures";
+import { blockFonts, connectMic, keepMicStream, mockFeedback, mockTranscribe } from "./fixtures";
 
 /** Home → consent → survey → self assessment → setup → sample skipped → "시험 시작". */
 async function reachFirstQuestion(page: Page) {
@@ -98,4 +98,17 @@ test("fallback notice waits until the test ends", async ({ page }) => {
     if (n >= 3) await expect(page.getByText("보조 음성인식으로 받아씁니다")).toHaveCount(0);
   });
   await expect(page.getByText("보조 음성인식으로 받아씁니다")).toHaveCount(1);
+});
+
+test("a microphone lost during the test asks to reconnect, then the question comes back", async ({ page }) => {
+  await keepMicStream(page);
+  await mockTranscribe(page);
+  await reachFirstQuestion(page);
+  await expect(page.getByRole("button", { name: "질문 듣기" })).toBeVisible();
+  // The way an unplugged device ends the track.
+  await page.evaluate(() => (window as unknown as { __mic: MediaStream }).__mic.getAudioTracks()[0].dispatchEvent(new Event("ended")));
+  await expect(page.getByText("마이크 연결이 끊겼습니다")).toBeVisible();
+  // With the browser's permission already given it reconnects on its own; otherwise the button does.
+  await connectMic(page);
+  await expect(page.getByRole("button", { name: "질문 듣기" })).toBeVisible();
 });

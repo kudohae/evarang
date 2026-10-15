@@ -10,6 +10,7 @@ import { FallbackNotice } from "@/components/FallbackNotice";
 import { AnswerStage } from "@/components/exam/QuestionStage";
 import { SelfAssessment } from "@/components/exam/SelfAssessment";
 import { Setup } from "@/components/exam/Setup";
+import { MicGate } from "@/components/practice/parts";
 import { EMPTY_SURVEY, Survey } from "@/components/exam/Survey";
 import { resolveVoice, useVoices, type Recording } from "@/lib/client/audio";
 import { EXAM_POLICY } from "@/lib/capture/policy";
@@ -59,6 +60,15 @@ function TestHeader({ number, total, deadline }: { number: number; total: number
   );
 }
 
+/** The microphone ended mid-test (unplugged, or access revoked): connect again and the question restarts. */
+function MicLost() {
+  return (
+    <div className="mx-auto flex w-full max-w-[520px] flex-1 flex-col justify-center px-5 py-10">
+      <MicGate message={<>마이크 연결이 끊겼습니다. 다시 연결하면 이 질문을 처음부터 다시 듣습니다.</>}>{() => null}</MicGate>
+    </div>
+  );
+}
+
 export function ExamApp() {
   const router = useRouter();
   const config = useConfig();
@@ -70,7 +80,8 @@ export function ExamApp() {
   const [surveyPage, setSurveyPage] = useState(0);
   const [survey, setSurvey] = useState<SurveyAnswers>(EMPTY_SURVEY);
   const [startLevel, setStartLevel] = useState<Level | null>(null);
-  const mic = useMicrophone();
+  // On from the setup step to the last answer; let go a while after the test (see MicrophoneProvider).
+  const mic = useMicrophone(step === "setup" || step === "sample" || step === "begin" || step === "question" || step === "adjust");
   const stream = mic.stream;
   const [sampleDone, setSampleDone] = useState(false);
   const [sampleKey, setSampleKey] = useState(0);
@@ -268,7 +279,7 @@ export function ExamApp() {
       />;
   }
 
-  if (step === "sample" && stream) {
+  if (step === "sample") {
     return (
       <Frame
         step={3}
@@ -296,7 +307,9 @@ export function ExamApp() {
         }
       >
         <div className="-mt-4 flex min-h-[420px] flex-col rounded-panel border border-line bg-surface shadow-panel">
-          {sampleDone ? (
+          {!stream ? (
+            <MicLost />
+          ) : sampleDone ? (
             <div className="rise flex flex-1 flex-col items-center justify-center px-6 text-center">
               <p className="text-[17px] font-semibold">연습이 끝났습니다.</p>
               <p className="mt-2 max-w-[380px] text-[15px] leading-relaxed text-ink-2">본 시험에서도 질문 글자는 보이지 않습니다. 다시 듣기는 질문이 끝난 뒤 5초 안에 한 번만 쓸 수 있습니다.</p>
@@ -339,12 +352,12 @@ export function ExamApp() {
     );
   }
 
-  if (step === "question" && stream) {
+  if (step === "question") {
     const q = questions[index];
     return (
       <div className="flex min-h-dvh flex-col">
         <TestHeader number={q.number} total={total} deadline={deadline} />
-        <AnswerStage key={q.number} voice={voice} stream={stream} text={q.text} policy={EXAM_POLICY} deadline={deadline} onDone={onAnswer} />
+        {stream ? <AnswerStage key={q.number} voice={voice} stream={stream} text={q.text} policy={EXAM_POLICY} deadline={deadline} onDone={onAnswer} /> : <MicLost />}
       </div>
     );
   }

@@ -32,3 +32,23 @@ export function saidRight(said: string, target: string, before = ""): boolean {
   const fixes = before ? words(target).filter((w) => !old.has(w)) : [];
   return sayScore(said, target) >= 0.8 && fixes.every((w) => spoken.has(w));
 }
+
+/** The target's words, each marked with whether it was said (in order, by the same LCS as sayScore). */
+export function wordDiff(said: string, target: string): { word: string; said: boolean }[] {
+  const shown = target.split(/\s+/).filter(Boolean);
+  const a = words(said);
+  const b = shown.map((w) => words(w)[0] ?? "");
+  const dp = Array.from({ length: a.length + 1 }, () => new Array<number>(b.length + 1).fill(0));
+  for (let i = 1; i <= a.length; i++)
+    for (let j = 1; j <= b.length; j++) dp[i][j] = a[i - 1] === b[j - 1] && b[j - 1] ? dp[i - 1][j - 1] + 1 : Math.max(dp[i - 1][j], dp[i][j - 1]);
+  const hit = new Array<boolean>(b.length).fill(false);
+  for (let i = a.length, j = b.length; i > 0 && j > 0; ) {
+    if (a[i - 1] === b[j - 1] && b[j - 1]) {
+      hit[j - 1] = true;
+      i--;
+      j--;
+    } else if (dp[i - 1][j] >= dp[i][j - 1]) i--;
+    else j--;
+  }
+  return shown.map((word, j) => ({ word, said: hit[j] || !b[j] }));
+}

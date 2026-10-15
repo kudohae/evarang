@@ -57,40 +57,59 @@ test.beforeEach(async ({ page }) => {
   await mockTranscribe(page);
 });
 
-test("corrections become cards and reviewing them moves them on", async ({ page }) => {
+test("mistake types at the top filter the cards and the review", async ({ page }) => {
   await seedExam(page);
-  await expect(page.getByText("오늘 복습할 카드 2장")).toBeVisible();
-  await expect(page.getByRole("heading", { name: "관사" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "분류 안 됨" })).toBeVisible();
+  await expect(page.getByRole("button", { name: /오늘 복습\s*2/ })).toBeVisible();
+  await page.getByRole("button", { name: /^문법/ }).click();
+  await expect(page.getByRole("button", { name: /^관사/ })).toBeVisible();
+  await expect(page.getByText("문법 · 1장")).toBeVisible();
+  await expect(page.getByText("an apartment")).toBeVisible();
+  await expect(page.getByText("I went there")).toHaveCount(0);
 
-  await page.getByRole("button", { name: "복습 시작" }).click();
-  await page.getByRole("button", { name: "마이크 없이 하기" }).click();
-  await page.getByRole("button", { name: "정답 보기" }).click();
-  await page.getByRole("button", { name: "맞혔어요" }).click();
-  await page.getByRole("button", { name: "정답 보기" }).click();
-  await page.getByRole("button", { name: "틀렸어요" }).click();
-  await expect(page.getByText("2장 중 1장을 맞혔습니다")).toBeVisible();
+  await page.getByRole("button", { name: "1장 복습 시작" }).click();
+  await page.getByRole("button", { name: /정답 보기/ }).click();
+  await page.getByRole("button", { name: /맞혔어요/ }).click();
+  await expect(page.getByText("모두 맞혔습니다")).toBeVisible();
+  await page.getByRole("button", { name: "첨삭노트로" }).click();
+  await expect(page.getByRole("button", { name: /오늘 복습\s*1/ })).toBeVisible();
+
+  // Keyboard: Space shows the answer, 2 marks it wrong.
+  const types = page.getByRole("region", { name: "오답 유형" });
+  await types.getByRole("button", { name: /^전체/ }).first().click();
+  await page.getByRole("button", { name: "1장 복습 시작" }).click();
+  await page.keyboard.press("Space");
+  await expect(page.getByText("고친 문장", { exact: true })).toBeVisible();
+  await page.keyboard.press("2");
+  await expect(page.getByRole("button", { name: "틀린 1장 다시" })).toBeVisible();
   await page.getByRole("button", { name: "첨삭노트로" }).click();
 
-  // The one answered right waits for later; the miss is due again.
-  await expect(page.getByText("오늘 복습할 카드 1장")).toBeVisible();
   await page.reload();
-  await expect(page.getByText("오늘 복습할 카드 1장")).toBeVisible();
-  await expect(page.getByText("복습 2단계")).toBeVisible();
-
-  await page.getByRole("button", { name: "숨기기" }).first().click();
-  await expect(page.getByRole("heading", { name: "숨긴 카드" })).toBeVisible();
+  await expect(page.getByRole("button", { name: /오늘 복습\s*1/ })).toBeVisible();
+  await page.getByRole("button", { name: /I went there/ }).click();
+  await page.getByRole("button", { name: "숨기기" }).click();
+  await expect(page.getByText("카드를 숨겼습니다")).toBeVisible();
+  await expect(page.getByRole("button", { name: "숨김 1" })).toBeVisible();
 });
 
-test("saying the correction aloud is checked against it", async ({ page }) => {
-  await page.route("**/api/transcribe", (route) => route.fulfill({ json: { text: "I live in an apartment.", words: [], audioSeconds: 2 } }));
+test("saying the correction aloud is checked, with the missed word shown", async ({ page }) => {
+  let said = "I live in a apartment.";
+  await page.route("**/api/transcribe", (route) => route.fulfill({ json: { text: said, words: [], audioSeconds: 2 } }));
   await seedExam(page);
-  await page.getByRole("button", { name: "복습 시작" }).click();
+  await page.getByRole("button", { name: /^문법/ }).click();
+  await page.getByRole("button", { name: "1장 복습 시작" }).click();
   await connectMic(page);
-  const card = page.locator("p[lang=en]").first();
-  const before = await card.textContent();
-  await page.getByRole("button", { name: "고쳐서 말하기" }).click();
-  await page.waitForTimeout(800);
+  await page.getByRole("button", { name: "말하기" }).click();
+  await page.waitForTimeout(700);
   await page.getByRole("button", { name: "다 말했어요" }).click();
-  await expect(page.getByText(before?.includes("apartment") ? "맞았습니다" : "아쉽습니다")).toBeVisible();
+  await expect(page.getByText("아쉽습니다")).toBeVisible();
+  await expect(page.locator("span.text-pen-ink", { hasText: "an" })).toBeVisible();
+
+  said = "I live in an apartment.";
+  await page.getByRole("button", { name: "다시 말하기" }).click();
+  await page.getByRole("button", { name: "말하기" }).click();
+  await page.waitForTimeout(700);
+  await page.getByRole("button", { name: "다 말했어요" }).click();
+  await expect(page.getByText("맞았습니다")).toBeVisible();
+  await page.getByRole("button", { name: "다음 카드" }).click();
+  await expect(page.getByText("모두 맞혔습니다")).toBeVisible();
 });

@@ -75,3 +75,27 @@ test("the microphone is let go a while after leaving the screens that record", a
   await page.clock.fastForward(20_000);
   await expect.poll(() => micState(page)).toBe("ended");
 });
+
+test("switching question while recording frees the other parts, and a deleted take stays deleted", async ({ page }) => {
+  await page.goto("/structure");
+  await page.getByRole("button", { name: "질문 받기" }).click();
+  await connectMic(page);
+  await part(page, "두괄식").getByRole("button", { name: "녹음" }).click();
+  await expect(part(page, "이유").getByRole("button", { name: "녹음" })).toBeDisabled();
+  await page.getByRole("button", { name: "다른 질문" }).click();
+  await expect(part(page, "이유").getByRole("button", { name: "녹음" })).toBeEnabled();
+  await expect(part(page, "두괄식").getByRole("button", { name: "녹음" })).toBeEnabled();
+
+  // Record, delete at once while it is still being transcribed: it must not come back.
+  await page.route("**/api/transcribe", async (route) => {
+    await new Promise((r) => setTimeout(r, 1500));
+    await route.fallback();
+  });
+  const card = part(page, "이유");
+  await card.getByRole("button", { name: "녹음" }).click();
+  await page.waitForTimeout(700);
+  await card.getByRole("button", { name: "녹음 끝내기" }).click();
+  await card.getByRole("button", { name: /지우기/ }).first().click();
+  await page.waitForTimeout(2500);
+  await expect(card.getByRole("radio")).toHaveCount(0);
+});

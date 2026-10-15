@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import { KINDS } from "@/lib/docs/kinds";
-import { chosenTakes, emptyDrill, FRAME, readyToEvaluate, takeStats, withTake, type Take } from "@/lib/practice/structure";
+import { chosenTakes, emptyDrill, FRAME, newTakeId, readyToEvaluate, replaceTake, takeStats, withTake, type Take } from "@/lib/practice/structure";
 import { StructureFeedbackSchema } from "@/lib/feedback/structure";
 
 const take = (part: string, n: number, text?: string, ms = 8000): Take => ({
@@ -40,6 +40,22 @@ describe("structure frame", () => {
 
   it("measures each take", () => {
     expect(takeStats(take("opening", 1, "um I really like it", 6400))).toEqual({ seconds: 6.4, words: 4 });
+  });
+
+  it("a transcript arriving after the take was deleted does not bring it back", () => {
+    let d = withTake(emptyDrill(), "opening", take("opening", 1));
+    d = replaceTake(d, "opening", take("opening", 1, "I love parks."));
+    expect(d.parts.opening.map((t) => t.transcript?.text)).toEqual(["I love parks."]);
+    d = { ...d, parts: { ...d.parts, opening: [] } };
+    expect(replaceTake(d, "opening", take("opening", 1, "late")).parts.opening).toEqual([]);
+  });
+
+  it("take ids never repeat after one is deleted, and fit the audio key rules", () => {
+    const a = newTakeId("example");
+    const b = newTakeId("example");
+    expect(a).not.toBe(b);
+    for (const id of [a, b]) expect(id).toMatch(/^example-[a-z0-9]+$/);
+    expect(`${a}`.length).toBeLessThanOrEqual(40);
   });
 
   it("practice sessions name the frame's recordings", () => {

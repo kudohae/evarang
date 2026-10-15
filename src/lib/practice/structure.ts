@@ -67,6 +67,24 @@ export function withTake(d: StructureDrill, part: PartId, t: Take): StructureDri
   return { ...d, parts };
 }
 
+/** Replaces a take that is still there; one deleted meanwhile stays deleted. */
+export function replaceTake(d: StructureDrill, part: PartId, t: Take): StructureDrill {
+  const list = d.parts[part] ?? [];
+  if (!list.some((x) => x.id === t.id)) return d;
+  return { ...d, parts: { ...d.parts, [part]: list.map((x) => (x.id === t.id ? t : x)) } };
+}
+
+let lastTake = 0;
+
+/**
+ * A take id never used before in this browser, so a deleted take's number is not reused: its stored audio
+ * would shadow the new recording's upload. Short enough for an audio key (`[a-z0-9_-]`, 40 at most).
+ */
+export function newTakeId(part: PartId): string {
+  lastTake = Math.max(Date.now(), lastTake + 1);
+  return `${part}-${lastTake.toString(36)}`;
+}
+
 export function chosenTakes(d: StructureDrill): Partial<Record<PartId, Take>> {
   const out: Partial<Record<PartId, Take>> = {};
   for (const p of FRAME) {

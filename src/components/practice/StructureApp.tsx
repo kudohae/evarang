@@ -12,6 +12,7 @@ import { deleteAudio } from "@/lib/client/db";
 import { TOPICS, topicById } from "@/lib/content/topics";
 import type { Session } from "@/lib/domain/session";
 import { useAttempts } from "@/lib/domain/useAttempts";
+import { localDocs } from "@/lib/docs/local";
 import { loadRecording } from "@/lib/docs/sync";
 import { useDocList } from "@/lib/docs/useDocList";
 import { TYPE_LABEL } from "@/lib/exam/compose";
@@ -19,7 +20,7 @@ import { newId } from "@/lib/exam/result";
 import { formatClock } from "@/lib/metrics";
 import { PRACTICE_TYPES, practiceQuestion, typesOf } from "@/lib/practice/questions";
 import { requestStructureFeedback } from "@/lib/practice/request";
-import { chosenTakes, emptyDrill, FRAME, readyToEvaluate, takeStats, withTake, type FramePart, type PartId, type StructureDrill, type Take } from "@/lib/practice/structure";
+import { chosenTakes, emptyDrill, FRAME, newTakeId, readyToEvaluate, replaceTake, takeStats, withTake, type FramePart, type PartId, type StructureDrill, type Take } from "@/lib/practice/structure";
 import type { ExamQuestion, QuestionType } from "@/lib/types";
 
 type StructureSession = Session & { structure: StructureDrill };
@@ -91,7 +92,8 @@ function PartCard({
   stream: MediaStream;
   busyElsewhere: boolean;
   onBusy: (busy: boolean) => void;
-  onTake: (t: Take) => void;
+  /** `added`: a new take; otherwise the transcript (or error) for one that may have been deleted meanwhile. */
+  onTake: (t: Take, added: boolean) => void;
   onChoose: (id: string) => void;
   onDelete: (t: Take) => void;
 }) {
@@ -108,7 +110,16 @@ function PartCard({
     const id = window.setInterval(() => setNow(Date.now()), 200);
     return () => window.clearInterval(id);
   }, [recording]);
-  useEffect(() => () => recorder.current?.discard(), []);
+  // Leaving mid-recording (another question, another page): drop it and free the other parts' buttons.
+  useEffect(
+    () => () => {
+      if (!recorder.current) return;
+      recorder.current.discard();
+      onBusy(false);
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- on unmount only
+    [],
+  );
 
   const start = () => {
     const r = new Recorder(stream);
@@ -127,16 +138,15 @@ function PartCard({
     setRecording(false);
     onBusy(false);
     const rec = await r.stop();
-    const n = Math.max(0, ...takes.map((t) => Number(t.id.split("-")[1]) || 0)) + 1;
-    const id = `${part.id}-${n}`;
+    const id = newTakeId(part.id);
     const base: Take = { id, audioKey: `${sessionId}:${id}`, mimeType: rec.mimeType, durationMs: rec.durationMs, createdAt: Date.now() };
-    onTake(base);
+    onTake(base, true);
     onChoose(id);
     try {
       const { transcript } = await keepAndTranscribe(rec, base.audioKey);
-      onTake({ ...base, transcript });
+      onTake({ ...base, transcript }, false);
     } catch (e) {
-      onTake({ ...base, error: (e as Error).message });
+      onTake({ ...base, error: (e as Error).message }, false);
     }
   };
 
@@ -318,6 +328,7 @@ export function StructureApp() {
   const [question, setQuestion] = useState<ExamQuestion | null>(null);
   const [session, setSession] = useState<StructureSession | null>(null);
   const latest = useRef<StructureSession | null>(null);
+  const behind = useRef<Promise<void>>(Promise.resolve());
   const [recordingPart, setRecordingPart] = useState<PartId | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -337,17 +348,29 @@ export function StructureApp() {
     latest.current = s;
     setSession(s);
     setQuestion(q);
+    setRecordingPart(null);
     setError("");
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
-  const update = (change: (d: StructureDrill) => StructureDrill) => {
+  // A write that finishes after the learner moved to another question (a transcript, feedback) goes to the
+  // session it belongs to, read back from this browser, not to the one on screen.
+  const update = async (id: string, change: (d: StructureDrill) => StructureDrill) => {
     const cur = latest.current;
-    if (!cur) return;
-    const next = { ...cur, structure: change(cur.structure) };
-    latest.current = next;
-    setSession(next);
-    void docs.save(next.id, next);
+    if (cur?.id === id) {
+      const next = { ...cur, structure: change(cur.structure) };
+      latest.current = next;
+      setSession(next);
+      await docs.save(id, next);
+      return;
+    }
+    // One at a time, so two late transcripts do not each read the copy without the other.
+    const run = behind.current.then(async () => {
+      const stored = (await localDocs.get<StructureSession>("session", id).catch(() => undefined))?.data;
+      if (stored?.structure) await docs.save(id, { ...stored, structure: change(stored.structure) });
+    });
+    behind.current = run.catch(() => {});
+    await run;
   };
 
   const evaluate = async () => {
@@ -358,7 +381,7 @@ export function StructureApp() {
     try {
       const available = config.models.filter((m) => m.available).map((m) => m.id);
       const { feedback, modelId } = await requestStructureFeedback({ ref: cur.id, question, drill: cur.structure, level, available });
-      update((d) => ({ ...d, feedback, modelId }));
+      void update(cur.id, (d) => ({ ...d, feedback, modelId }));
       toast("평가를 마쳤습니다");
       window.setTimeout(() => document.getElementById("structure-result")?.scrollIntoView({ behavior: "smooth", block: "start" }), 80);
     } catch (e) {
@@ -378,7 +401,7 @@ export function StructureApp() {
           <PageHead
             title="문장 구조화 연습"
             lead="네 단계를 하나씩 따로 녹음하세요. 같은 단계를 몇 번이고 다시 녹음하고, 마음에 드는 녹음을 고를 수 있습니다."
-            back={<BackButton onClick={() => (setQuestion(null), setSession(null))}>유형·주제 다시 고르기</BackButton>}
+            back={<BackButton onClick={() => (setQuestion(null), setSession(null), setRecordingPart(null))}>유형·주제 다시 고르기</BackButton>}
           />
 
           <div className="rise mt-8 rounded-panel border border-line bg-surface px-6 py-6 shadow-panel">
@@ -414,11 +437,11 @@ export function StructureApp() {
                       stream={stream}
                       busyElsewhere={recordingPart !== null && recordingPart !== p.id}
                       onBusy={(b) => setRecordingPart(b ? p.id : null)}
-                      onTake={(t) => update((d) => withTake(d, p.id, t))}
-                      onChoose={(id) => update((d) => ({ ...d, chosen: { ...d.chosen, [p.id]: id } }))}
+                      onTake={(t, added) => void update(session.id, (d) => (added ? withTake : replaceTake)(d, p.id, t))}
+                      onChoose={(id) => void update(session.id, (d) => ({ ...d, chosen: { ...d.chosen, [p.id]: id } }))}
                       onDelete={(t) => {
                         void deleteAudio(t.audioKey).catch(() => {});
-                        update((d) => {
+                        void update(session.id, (d) => {
                           const parts = { ...d.parts, [p.id]: d.parts[p.id].filter((x) => x.id !== t.id) };
                           const chosen = { ...d.chosen };
                           if (chosen[p.id] === t.id) delete chosen[p.id];

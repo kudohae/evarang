@@ -36,7 +36,7 @@ export const FEATURES: Feature[] = [
     ],
   },
   { id: "structure", label: "문장 구조화 연습", href: "/structure", status: "open", description: "바로 답하기, 이유, 예시, 내 생각. 한 단계씩 천천히 쌓아 말합니다." },
-  { id: "stories", label: "스토리뱅크", href: "/stories", status: "soon", description: "내 경험으로 여러 주제에 돌려 쓸 이야기를 만들어 둡니다." },
+  { id: "stories", label: "스토리뱅크", href: "/stories", status: "open", description: "내 경험으로 여러 주제에 돌려 쓸 이야기를 만들어 둡니다." },
 ];
 
 export function openFeatures(): Feature[] {

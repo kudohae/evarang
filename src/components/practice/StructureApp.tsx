@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { AppShell } from "@/components/AppShell";
 import { PracticeRunner } from "@/components/practice/PracticeRunner";
 import { Block, formatDay, HistoryRow, MicGate, Page, PageHead } from "@/components/practice/parts";
@@ -59,6 +59,8 @@ export function StructureApp() {
   const [session, setSession] = useState<Session | null>(null);
   const [question, setQuestion] = useState<ExamQuestion | null>(null);
   const [number, setNumber] = useState(1);
+  // The latest copy, for saves that finish after newer ones started (transcript, then feedback).
+  const latest = useRef<Session | null>(null);
 
   const mine = useMemo(() => (docs.local ?? []).flatMap((d) => (d.data?.kind === "structure" ? [d.data] : [])), [docs.local]);
   const passed = useMemo(() => passedSteps(mine), [mine]);
@@ -67,15 +69,18 @@ export function StructureApp() {
 
   const start = (s: Step) => {
     setStep(s);
-    setSession({ id: newId(), kind: "structure", createdAt: Date.now(), title: `구조화 · ${s.title}`, settings: { step: s.id }, attempts: [] });
+    latest.current = { id: newId(), kind: "structure", createdAt: Date.now(), title: `구조화 · ${s.title}`, settings: { step: s.id }, attempts: [] };
+    setSession(latest.current);
     setQuestion(ask(s));
     setNumber(1);
     window.scrollTo({ top: 0 });
   };
 
   const record = async (a: Attempt) => {
-    if (!session) return;
-    const updated = { ...session, attempts: [...session.attempts.filter((x) => x.id !== a.id), a] };
+    const cur = latest.current;
+    if (!cur) return;
+    const updated = { ...cur, attempts: [...cur.attempts.filter((x) => x.id !== a.id), a] };
+    latest.current = updated;
     setSession(updated);
     await docs.save(updated.id, updated);
   };

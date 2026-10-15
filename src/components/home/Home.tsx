@@ -69,6 +69,15 @@ function Menu() {
                 <span className="min-w-0 flex-1">
                   <span className="block text-[18px] font-semibold tracking-[-0.01em]">{f.label}</span>
                   <span className="mt-1 block text-[14px] leading-relaxed text-ink-2">{f.description}</span>
+                  {f.children && (
+                    <span className="mt-2 flex flex-col gap-0.5 text-[13px] text-ink-3">
+                      {f.children.map((c) => (
+                        <span key={c.id}>
+                          <span className="font-semibold text-ink-2">{c.label}</span> · {c.description}
+                        </span>
+                      ))}
+                    </span>
+                  )}
                 </span>
                 {f.meta && <span className="hidden shrink-0 text-[13px] text-ink-3 sm:block">{f.meta}</span>}
                 <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-primary text-primary-ink transition-transform duration-150 group-hover:translate-x-0.5">

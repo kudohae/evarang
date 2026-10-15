@@ -43,18 +43,26 @@ export type FeedbackRequest = { model: ModelOption; lens: Lens; ref: string; con
 export async function readFeedbackRequest(request: Request, maxItems: number): Promise<FeedbackRequest | Response> {
   const parsed = Body.safeParse(await request.json().catch(() => null));
   if (!parsed.success || parsed.data.context.items.length > maxItems) return apiError(400, "요청 형식이 올바르지 않습니다.", { kind: "invalid" });
-  const model = modelById(parsed.data.model);
-  if (!model) return apiError(400, "알 수 없는 평가 모델입니다.", { kind: "invalid" });
+  const access = await modelAccess(parsed.data.model);
+  if (access instanceof Response) return access;
   const lensId = (parsed.data.lens ?? "exam") as LensId;
   const lens = Object.hasOwn(LENSES, lensId) ? LENSES[lensId] : undefined;
   if (!lens) return apiError(400, "알 수 없는 피드백 종류입니다.", { kind: "invalid" });
-  const base = { model, lens, ref: parsed.data.ref, context: parsed.data.context as unknown as EvalContext };
-  if (!model.own) return base;
-  // An own-key model without a signed-in member who has a key: "out for today", so the ladder moves on.
+  return { ...access, lens, ref: parsed.data.ref, context: parsed.data.context as unknown as EvalContext };
+}
+
+/**
+ * The model a request names, with the member's key for own-key models. An own-key model without a
+ * signed-in member who has a key answers "out for today", so the ladder moves on.
+ */
+export async function modelAccess(id: string): Promise<{ model: ModelOption; apiKey?: string; owner?: string } | Response> {
+  const model = modelById(id);
+  if (!model) return apiError(400, "알 수 없는 평가 모델입니다.", { kind: "invalid" });
+  if (!model.own) return { model };
   const user = await currentUser().catch(() => null);
   const apiKey = user ? await memberKey(user.id, model.provider).catch(() => null) : null;
   if (!user || !apiKey) return apiError(400, "내 API 키가 없습니다.", { kind: "daily" });
-  return { ...base, apiKey, owner: user.id };
+  return { model, apiKey, owner: user.id };
 }
 
 /** Mock-test grading counts once per test; other feedback counts per answer. */

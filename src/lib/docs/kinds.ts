@@ -32,6 +32,14 @@ type ExamLike = {
   evaluations?: { modelId?: string; overall?: { grade?: string } }[];
 };
 
+/** Recording keys of attempts: their audioKey is `${docId}:${key}`. */
+function recordingKeys(attempts: unknown[] | undefined): string[] {
+  return (attempts ?? []).flatMap((a) => {
+    const key = (a as { recording?: { audioKey?: string } })?.recording?.audioKey;
+    return key ? [key.slice(key.lastIndexOf(":") + 1)] : [];
+  });
+}
+
 export const KINDS: Record<DocKind, Kind> = {
   exam: {
     maxBytes: 900_000,
@@ -56,15 +64,24 @@ export const KINDS: Record<DocKind, Kind> = {
     maxBytes: 900_000,
     hasAudio: true,
     summary(data) {
-      const s = (data ?? {}) as { kind?: string; createdAt?: number; attempts?: unknown[] };
-      return { kind: s.kind ?? null, createdAt: s.createdAt ?? null, attemptCount: s.attempts?.length ?? null };
+      const s = (data ?? {}) as { kind?: string; title?: string; createdAt?: number; attempts?: unknown[] };
+      return { kind: s.kind ?? null, title: s.title ?? null, createdAt: s.createdAt ?? null, attemptCount: s.attempts?.length ?? null };
     },
-    // Practice features decide their recording keys when they are built.
-    audioKeys: () => [],
+    audioKeys: (data) => recordingKeys((data as { attempts?: unknown[] } | null)?.attempts),
     localFields: [],
   },
-  note: { maxBytes: 50_000, hasAudio: false, summary: () => ({}), audioKeys: () => [], localFields: [] },
-  story: { maxBytes: 200_000, hasAudio: false, summary: () => ({}), audioKeys: () => [], localFields: [] },
+  // One review-state document; cards are rebuilt from the attempts. ~2,000 cards fit.
+  note: { maxBytes: 200_000, hasAudio: false, summary: () => ({}), audioKeys: () => [], localFields: [] },
+  story: {
+    maxBytes: 200_000,
+    hasAudio: true,
+    summary(data) {
+      const s = (data ?? {}) as { title?: string; createdAt?: number };
+      return { title: s.title ?? null, createdAt: s.createdAt ?? null };
+    },
+    audioKeys: (data) => recordingKeys((data as { practice?: unknown[] } | null)?.practice),
+    localFields: [],
+  },
 };
 
 export function isDocKind(k: string): k is DocKind {

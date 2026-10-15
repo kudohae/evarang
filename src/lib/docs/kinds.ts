@@ -73,7 +73,8 @@ export const KINDS: Record<DocKind, Kind> = {
   // One review-state document; cards are rebuilt from the attempts. ~2,000 cards fit.
   note: { maxBytes: 200_000, hasAudio: false, summary: () => ({}), audioKeys: () => [], localFields: [] },
   story: {
-    maxBytes: 200_000,
+    // Each practice keeps a timed transcript and full feedback (~10–15 KB).
+    maxBytes: 900_000,
     hasAudio: true,
     summary(data) {
       const s = (data ?? {}) as { title?: string; createdAt?: number };

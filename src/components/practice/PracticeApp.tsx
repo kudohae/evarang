@@ -12,7 +12,9 @@ import { skillProfile, suggestLens } from "@/lib/domain/profile";
 import type { Session } from "@/lib/domain/session";
 import { skillById } from "@/lib/domain/skills";
 import { useAttempts } from "@/lib/domain/useAttempts";
+import { localDocs } from "@/lib/docs/local";
 import { useDocList } from "@/lib/docs/useDocList";
+import { recordAttempt } from "@/lib/practice/record";
 import { TYPE_LABEL } from "@/lib/exam/compose";
 import { newId } from "@/lib/exam/result";
 import type { LensId } from "@/lib/feedback/lenses";
@@ -58,13 +60,16 @@ export function PracticeApp() {
     window.scrollTo({ top: 0 });
   };
 
+  // A late save from an earlier session (feedback arriving after the learner moved on) goes to that session.
   const record = async (a: Attempt) => {
-    const cur = latest.current;
-    if (!cur) return;
-    const updated = { ...cur, attempts: [...cur.attempts.filter((x) => x.id !== a.id), a] };
-    latest.current = updated;
-    setSession(updated);
-    await docs.save(updated.id, updated);
+    const open = await recordAttempt(latest.current, a, {
+      get: async (id) => (await localDocs.get<Session>("session", id).catch(() => undefined))?.data ?? null,
+      save: (s) => docs.save(s.id, s),
+    });
+    if (open && open.id === a.sessionId && latest.current?.id === open.id) {
+      latest.current = open;
+      setSession(open);
+    }
   };
 
   if (setting && session && question) {

@@ -10,5 +10,7 @@ describe("kinds", () => {
     expect(KINDS.session.summary({ kind: "drill", title: "과거 경험", createdAt: 5, attempts: [1, 2] })).toMatchObject({ title: "과거 경험", attemptCount: 2 });
     expect(KINDS.story.summary({ title: "제주 여행", createdAt: 7 })).toMatchObject({ title: "제주 여행", createdAt: 7 });
     expect(KINDS.note.maxBytes).toBeGreaterThanOrEqual(200_000);
+    // Each story practice carries a timed transcript and full feedback; a few dozen must fit.
+    expect(KINDS.story.maxBytes).toBeGreaterThanOrEqual(900_000);
   });
 });

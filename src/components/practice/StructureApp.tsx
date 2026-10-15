@@ -10,7 +10,9 @@ import type { Attempt } from "@/lib/domain/attempt";
 import type { Session } from "@/lib/domain/session";
 import { skillById } from "@/lib/domain/skills";
 import { useAttempts } from "@/lib/domain/useAttempts";
+import { localDocs } from "@/lib/docs/local";
 import { useDocList } from "@/lib/docs/useDocList";
+import { recordAttempt } from "@/lib/practice/record";
 import { newId } from "@/lib/exam/result";
 import { practiceQuestion } from "@/lib/practice/questions";
 import { passedSteps, STEPS, stepVerdict, type Step } from "@/lib/practice/structure";
@@ -76,13 +78,16 @@ export function StructureApp() {
     window.scrollTo({ top: 0 });
   };
 
+  // A late save from an earlier session (feedback arriving after the learner moved on) goes to that session.
   const record = async (a: Attempt) => {
-    const cur = latest.current;
-    if (!cur) return;
-    const updated = { ...cur, attempts: [...cur.attempts.filter((x) => x.id !== a.id), a] };
-    latest.current = updated;
-    setSession(updated);
-    await docs.save(updated.id, updated);
+    const open = await recordAttempt(latest.current, a, {
+      get: async (id) => (await localDocs.get<Session>("session", id).catch(() => undefined))?.data ?? null,
+      save: (s) => docs.save(s.id, s),
+    });
+    if (open && open.id === a.sessionId && latest.current?.id === open.id) {
+      latest.current = open;
+      setSession(open);
+    }
   };
 
   if (step && session && question) {

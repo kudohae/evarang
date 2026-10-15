@@ -27,3 +27,16 @@ export function dueCards<T extends { id: string }>(cards: T[], state: ReviewStat
     })
     .sort((a, b) => (state[a.id]?.due ?? Infinity) - (state[b.id]?.due ?? Infinity));
 }
+
+/**
+ * Two copies of the review state (this browser, the account) as one: for each card the copy reviewed more
+ * often wins, and on a tie the one due later (the more recent pass). Nothing reviewed on either device is lost.
+ */
+export function mergeReviewState(a: ReviewState, b: ReviewState): ReviewState {
+  const out: ReviewState = { ...a };
+  for (const [id, s] of Object.entries(b)) {
+    const mine = out[id];
+    if (!mine || s.reviews > mine.reviews || (s.reviews === mine.reviews && s.due > mine.due)) out[id] = s;
+  }
+  return out;
+}

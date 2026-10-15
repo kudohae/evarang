@@ -9,15 +9,15 @@ import { Recorder, resolveVoice, speak, useVoices } from "@/lib/client/audio";
 import { transcribeBlob } from "@/lib/client/transcribe";
 import { SKILLS, skillById } from "@/lib/domain/skills";
 import { useAttempts } from "@/lib/domain/useAttempts";
-import { loadDoc } from "@/lib/docs/sync";
-import { useDocList } from "@/lib/docs/useDocList";
+import { localDocs } from "@/lib/docs/local";
+import { syncEnabled } from "@/lib/docs/policy";
 import { cardsFromAttempts, type NoteCard } from "@/lib/notes/cards";
 import { saidRight } from "@/lib/notes/match";
-import { dueCards, nextReview, type ReviewState } from "@/lib/notes/review";
+import { dueCards, mergeReviewState, nextReview, type ReviewState } from "@/lib/notes/review";
+import { loadReviewState, saveReviewState } from "@/lib/notes/sync";
 
 const STATE_ID = "reviewstate";
 const SESSION_SIZE = 10;
-type NoteDoc = { cards: ReviewState };
 
 function SayIt({ text }: { text: string }) {
   const voices = useVoices();
@@ -176,30 +176,41 @@ function Review({ queue, stream, onGrade, onExit }: { queue: NoteCard[]; stream:
 export function NotesApp() {
   const config = useConfig();
   const { attempts } = useAttempts();
-  const docs = useDocList<NoteDoc>("note");
+  const keep = syncEnabled(config.user);
+  const audio = config.storage?.blob !== false;
   const [state, setState] = useState<ReviewState | null>(null);
   const [queue, setQueue] = useState<NoteCard[] | null>(null);
   const [showHidden, setShowHidden] = useState(false);
+  const accountOk = useRef(true);
+  const latest = useRef<ReviewState>({});
+  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
-  // The review state: this browser's copy, or the account's when this browser has none yet.
+  // This browser's copy merged with the account's, so reviews made on another device are kept.
   useEffect(() => {
-    if (docs.local === null || state !== null) return;
-    const here = docs.local.find((d) => d.id === STATE_ID)?.data;
-    if (here) return setState(here.cards);
-    if (!docs.keep) return setState({});
-    void loadDoc<NoteDoc>("note", STATE_ID)
-      .then((d) => setState(d?.data?.cards ?? {}))
-      .catch(() => setState({}));
-  }, [docs.local, docs.keep, state]);
+    void loadReviewState(keep).then((r) => {
+      accountOk.current = r.accountOk;
+      latest.current = r.state;
+      setState(r.state);
+    });
+  }, [keep]);
 
   const cards = useMemo(() => {
     const seen = new Set<string>();
     return cardsFromAttempts(attempts ?? []).filter((c) => !seen.has(c.id) && seen.add(c.id));
   }, [attempts]);
 
+  // Saved here at once; the account copy follows a moment later, merged card by card.
   const update = (next: ReviewState) => {
+    latest.current = next;
     setState(next);
-    void docs.save(STATE_ID, { cards: next });
+    void localDocs.put("note", STATE_ID, { cards: next }).catch(() => {});
+    clearTimeout(timer.current);
+    timer.current = setTimeout(() => {
+      void saveReviewState(latest.current, { keep, accountOk: accountOk.current, audio }).then((merged) => {
+        latest.current = mergeReviewState(latest.current, merged);
+        setState(latest.current);
+      });
+    }, 1200);
   };
 
   if (attempts === null || state === null) {

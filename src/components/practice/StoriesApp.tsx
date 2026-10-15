@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useConfig } from "@/components/AccessGate";
 import { AppShell } from "@/components/AppShell";
 import { FormError } from "@/components/account/parts";
@@ -29,6 +29,8 @@ export function StoriesApp() {
   const [level, setLevel] = useState<StoryLevel>("IM3");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  // One id per story being made: retries after a failure reuse it, so the daily count is spent once.
+  const pending = useRef(newId());
 
   const toggle = (id: string) => setTopics((t) => (t.includes(id) ? t.filter((x) => x !== id) : t.length >= 3 ? t : [...t, id]));
   const ready = topics.length > 0 && memo.trim().length >= 10;
@@ -36,12 +38,13 @@ export function StoriesApp() {
   const create = async () => {
     setBusy(true);
     setError("");
-    const id = newId();
+    const id = pending.current;
     try {
       const available = config.models.filter((m) => m.available).map((m) => m.id);
       const { story, modelId } = await generateStory({ ref: id, topicIds: topics, memo, level }, available);
       const doc: StoryDoc = { ...story, id, createdAt: Date.now(), topicIds: topics, memo, level, modelId, practice: [] };
       await docs.saveNow(id, doc);
+      pending.current = newId();
       router.push(`/stories/${id}`);
     } catch (e) {
       setError((e as Error).message);

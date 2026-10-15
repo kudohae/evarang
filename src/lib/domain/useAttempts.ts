@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import type { Attempt } from "@/lib/domain/attempt";
-import { attemptsFromExam } from "@/lib/domain/from-exam";
+import { collectAttempts } from "@/lib/domain/collect";
 import type { Session } from "@/lib/domain/session";
 import { localDocs } from "@/lib/docs/local";
 import type { ExamResult } from "@/lib/exam/result";
@@ -23,14 +23,13 @@ export function useAttempts(): { attempts: Attempt[] | null; level: Level } {
         localDocs.list<Session>("session").catch(() => []),
         localDocs.list<StoryPracticeDoc>("story").catch(() => []),
       ]);
-      const results = exams.flatMap((d) => (d.data ? [d.data] : []));
-      const attempts = [
-        ...results.flatMap((r) => attemptsFromExam(r)),
-        ...sessions.flatMap((d) => d.data?.attempts ?? []),
-        ...stories.flatMap((d) => d.data?.practice ?? []),
-      ].sort((a, b) => b.createdAt - a.createdAt);
-      const latest = results.sort((a, b) => b.createdAt - a.createdAt)[0];
-      setState({ attempts, level: latest?.finalLevel ?? 4 });
+      setState(
+        collectAttempts(
+          exams.flatMap((d) => (d.data ? [d.data] : [])),
+          sessions.flatMap((d) => (d.data ? [d.data] : [])),
+          stories.flatMap((d) => (d.data ? [d.data] : [])),
+        ),
+      );
     })();
   }, []);
   return state;

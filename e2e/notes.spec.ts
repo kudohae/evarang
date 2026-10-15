@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { blockFonts, mockTranscribe } from "./fixtures";
+import { blockFonts, connectMic, mockTranscribe } from "./fixtures";
 
 /** A finished, evaluated mock test, written straight into this browser's store. */
 async function seedExam(page: Page) {
@@ -86,7 +86,7 @@ test("saying the correction aloud is checked against it", async ({ page }) => {
   await page.route("**/api/transcribe", (route) => route.fulfill({ json: { text: "I live in an apartment.", words: [], audioSeconds: 2 } }));
   await seedExam(page);
   await page.getByRole("button", { name: "복습 시작" }).click();
-  await page.getByRole("button", { name: "마이크 연결" }).click();
+  await connectMic(page);
   const card = page.locator("p[lang=en]").first();
   const before = await card.textContent();
   await page.getByRole("button", { name: "고쳐서 말하기" }).click();

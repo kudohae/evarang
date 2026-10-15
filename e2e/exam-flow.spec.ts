@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { blockFonts, mockFeedback, mockTranscribe } from "./fixtures";
+import { blockFonts, connectMic, mockFeedback, mockTranscribe } from "./fixtures";
 
 /** Home → consent → survey → self assessment → setup → sample skipped → "시험 시작". */
 async function reachFirstQuestion(page: Page) {
@@ -21,7 +21,7 @@ async function reachFirstQuestion(page: Page) {
   await page.getByRole("button", { name: "다음" }).click();
   await page.getByText("나는 나 자신, 일상, 일/학교").click();
   await page.getByRole("button", { name: "다음" }).click();
-  await page.getByRole("button", { name: "마이크 연결" }).click();
+  await connectMic(page);
   await page.getByRole("button", { name: "녹음 테스트" }).click();
   await page.getByText("받아쓴 내용").waitFor();
   await page.getByRole("button", { name: "다음" }).click();

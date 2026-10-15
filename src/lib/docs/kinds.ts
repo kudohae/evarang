@@ -40,6 +40,16 @@ function recordingKeys(attempts: unknown[] | undefined): string[] {
   });
 }
 
+/** Recording keys of a structure drill's takes (`${docId}:${part}-${n}`). */
+function takeKeys(parts: Record<string, unknown[]> | undefined): string[] {
+  return Object.values(parts ?? {}).flatMap((takes) =>
+    (takes ?? []).flatMap((t) => {
+      const key = (t as { audioKey?: string })?.audioKey;
+      return key ? [key.slice(key.lastIndexOf(":") + 1)] : [];
+    }),
+  );
+}
+
 export const KINDS: Record<DocKind, Kind> = {
   exam: {
     maxBytes: 900_000,
@@ -67,7 +77,10 @@ export const KINDS: Record<DocKind, Kind> = {
       const s = (data ?? {}) as { kind?: string; title?: string; createdAt?: number; attempts?: unknown[] };
       return { kind: s.kind ?? null, title: s.title ?? null, createdAt: s.createdAt ?? null, attemptCount: s.attempts?.length ?? null };
     },
-    audioKeys: (data) => recordingKeys((data as { attempts?: unknown[] } | null)?.attempts),
+    audioKeys: (data) => {
+      const d = data as { attempts?: unknown[]; structure?: { parts?: Record<string, unknown[]> } } | null;
+      return [...recordingKeys(d?.attempts), ...takeKeys(d?.structure?.parts)];
+    },
     localFields: [],
   },
   // One review-state document; cards are rebuilt from the attempts. ~2,000 cards fit.

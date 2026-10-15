@@ -1,188 +1,505 @@
 "use client";
 
-import Link from "next/link";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useConfig } from "@/components/AccessGate";
 import { AppShell } from "@/components/AppShell";
-import { PracticeRunner } from "@/components/practice/PracticeRunner";
-import { Block, formatDay, HistoryRow, MicGate, Page, PageHead } from "@/components/practice/parts";
-import { Button } from "@/components/ui";
-import type { Attempt } from "@/lib/domain/attempt";
+import { Block, MicGate, Page, PageHead } from "@/components/practice/parts";
+import { useToast } from "@/components/Toast";
+import { BackButton, Button, Chip, Icon, Spinner } from "@/components/ui";
+import { keepAndTranscribe } from "@/lib/capture/pipeline";
+import { Recorder, resolveVoice, speak, useMicLevel, useVoices } from "@/lib/client/audio";
+import { deleteAudio } from "@/lib/client/db";
+import { TOPICS, topicById } from "@/lib/content/topics";
 import type { Session } from "@/lib/domain/session";
-import { skillById } from "@/lib/domain/skills";
 import { useAttempts } from "@/lib/domain/useAttempts";
-import { localDocs } from "@/lib/docs/local";
+import { loadRecording } from "@/lib/docs/sync";
 import { useDocList } from "@/lib/docs/useDocList";
-import { recordAttempt } from "@/lib/practice/record";
+import { TYPE_LABEL } from "@/lib/exam/compose";
 import { newId } from "@/lib/exam/result";
-import { practiceQuestion } from "@/lib/practice/questions";
-import { passedSteps, STEPS, stepVerdict, type Step } from "@/lib/practice/structure";
-import type { ExamQuestion } from "@/lib/types";
+import { formatClock } from "@/lib/metrics";
+import { PRACTICE_TYPES, practiceQuestion, typesOf } from "@/lib/practice/questions";
+import { requestStructureFeedback } from "@/lib/practice/request";
+import { chosenTakes, emptyDrill, FRAME, readyToEvaluate, takeStats, withTake, type FramePart, type PartId, type StructureDrill, type Take } from "@/lib/practice/structure";
+import type { ExamQuestion, QuestionType } from "@/lib/types";
+
+type StructureSession = Session & { structure: StructureDrill };
 
 const VERDICT = {
-  strong: { label: "잘했습니다", tone: "border-good/40 bg-surface text-good" },
-  weak: { label: "아직 부족합니다", tone: "border-pen/40 bg-pen-soft text-pen-ink" },
-  unclear: { label: "판단하기 어려웠습니다", tone: "border-line bg-surface text-ink-2" },
+  good: { label: "좋음", tone: "bg-good-soft text-good border-good/30" },
+  ok: { label: "보통", tone: "bg-wash text-ink-2 border-line-strong" },
+  weak: { label: "부족", tone: "bg-pen-soft text-pen-ink border-pen/30" },
 } as const;
 
-function StepGuide({ step }: { step: Step }) {
+/** Plays a take's recording, loading it only when asked. */
+function TakePlayer({ audioKey }: { audioKey: string }) {
+  const [url, setUrl] = useState("");
+  const [playing, setPlaying] = useState(false);
+  const ref = useRef<HTMLAudioElement>(null);
+  useEffect(() => () => void (url && URL.revokeObjectURL(url)), [url]);
+  const toggle = async () => {
+    if (playing) return ref.current?.pause();
+    let u = url;
+    if (!u) {
+      const blob = await loadRecording(audioKey, "session");
+      if (!blob) return;
+      u = URL.createObjectURL(blob);
+      setUrl(u);
+    }
+    window.setTimeout(() => void ref.current?.play(), 0);
+  };
   return (
-    <div className="rounded-panel border border-line bg-surface px-6 py-5 shadow-panel">
-      <p className="text-[15px] leading-[1.75] text-ink-2">{step.explain}</p>
-      <p className="mt-4 text-[13px] font-semibold text-ink-3">쓸 만한 틀</p>
-      <ul className="mt-2 flex flex-col gap-1.5" lang="en">
-        {step.frames.map((f) => (
-          <li key={f} className="text-[15px] text-ink">
-            {f}
-          </li>
-        ))}
-      </ul>
+    <>
+      <audio ref={ref} src={url || undefined} onPlay={() => setPlaying(true)} onPause={() => setPlaying(false)} onEnded={() => setPlaying(false)} />
+      <button
+        type="button"
+        onClick={() => void toggle()}
+        aria-label={playing ? "일시정지" : "녹음 듣기"}
+        className="flex size-8 shrink-0 items-center justify-center rounded-full border border-line-strong text-ink-2 transition-[color,border-color,transform] hover:border-ink hover:text-ink active:scale-95"
+      >
+        <Icon name={playing ? "pause" : "play"} className="size-3" />
+      </button>
+    </>
+  );
+}
+
+function LevelBar({ stream, active }: { stream: MediaStream; active: boolean }) {
+  const level = useMicLevel(stream, active);
+  return (
+    <div className="h-1.5 w-24 overflow-hidden rounded-full bg-line">
+      <div className="h-full rounded-full bg-pen transition-[width] duration-75" style={{ width: `${Math.min(100, level * 140)}%` }} />
     </div>
   );
 }
 
-function Verdict({ step, attempt }: { step: Step; attempt: Attempt }) {
-  return (
-    <div className="flex flex-col gap-2">
-      {stepVerdict(step, attempt.feedback).map((v) => (
-        <div key={v.skill} className={`flex items-center justify-between gap-4 rounded-panel border px-5 py-4 ${VERDICT[v.verdict].tone}`}>
-          <span className="text-[16px] font-semibold text-ink">{skillById(v.skill)?.label}</span>
-          <span className="text-[15px] font-semibold">{VERDICT[v.verdict].label}</span>
-        </div>
-      ))}
-    </div>
-  );
-}
+/** One part of the frame: its guide, the record button, and every take recorded so far. */
+function PartCard({
+  index,
+  part,
+  drill,
+  sessionId,
+  stream,
+  busyElsewhere,
+  onBusy,
+  onTake,
+  onChoose,
+  onDelete,
+}: {
+  index: number;
+  part: FramePart;
+  drill: StructureDrill;
+  sessionId: string;
+  stream: MediaStream;
+  busyElsewhere: boolean;
+  onBusy: (busy: boolean) => void;
+  onTake: (t: Take) => void;
+  onChoose: (id: string) => void;
+  onDelete: (t: Take) => void;
+}) {
+  const takes = drill.parts[part.id] ?? [];
+  const chosen = chosenTakes(drill)[part.id];
+  const [recording, setRecording] = useState(false);
+  const [since, setSince] = useState(0);
+  const [now, setNow] = useState(0);
+  const [showFrames, setShowFrames] = useState(false);
+  const recorder = useRef<Recorder | null>(null);
 
-/** 문장 구조화 연습: one part of the answer's skeleton at a time. */
-export function StructureApp() {
-  const { level } = useAttempts();
-  const docs = useDocList<Session>("session");
-  const [step, setStep] = useState<Step | null>(null);
-  const [session, setSession] = useState<Session | null>(null);
-  const [question, setQuestion] = useState<ExamQuestion | null>(null);
-  const [number, setNumber] = useState(1);
-  // The latest copy, for saves that finish after newer ones started (transcript, then feedback).
-  const latest = useRef<Session | null>(null);
+  useEffect(() => {
+    if (!recording) return;
+    const id = window.setInterval(() => setNow(Date.now()), 200);
+    return () => window.clearInterval(id);
+  }, [recording]);
+  useEffect(() => () => recorder.current?.discard(), []);
 
-  const mine = useMemo(() => (docs.local ?? []).flatMap((d) => (d.data?.kind === "structure" ? [d.data] : [])), [docs.local]);
-  const passed = useMemo(() => passedSteps(mine), [mine]);
-
-  const ask = (s: Step, avoid?: string) => practiceQuestion({ type: s.types[Math.floor(Math.random() * s.types.length)], avoid });
-
-  const start = (s: Step) => {
-    setStep(s);
-    latest.current = { id: newId(), kind: "structure", createdAt: Date.now(), title: `구조화 · ${s.title}`, settings: { step: s.id }, attempts: [] };
-    setSession(latest.current);
-    setQuestion(ask(s));
-    setNumber(1);
-    window.scrollTo({ top: 0 });
+  const start = () => {
+    const r = new Recorder(stream);
+    recorder.current = r;
+    r.start();
+    setSince(Date.now());
+    setNow(Date.now());
+    setRecording(true);
+    onBusy(true);
   };
 
-  // A late save from an earlier session (feedback arriving after the learner moved on) goes to that session.
-  const record = async (a: Attempt) => {
-    const open = await recordAttempt(latest.current, a, {
-      get: async (id) => (await localDocs.get<Session>("session", id).catch(() => undefined))?.data ?? null,
-      save: (s) => docs.save(s.id, s),
-    });
-    if (open && open.id === a.sessionId && latest.current?.id === open.id) {
-      latest.current = open;
-      setSession(open);
+  const stop = async () => {
+    const r = recorder.current;
+    if (!r) return;
+    recorder.current = null;
+    setRecording(false);
+    onBusy(false);
+    const rec = await r.stop();
+    const n = Math.max(0, ...takes.map((t) => Number(t.id.split("-")[1]) || 0)) + 1;
+    const id = `${part.id}-${n}`;
+    const base: Take = { id, audioKey: `${sessionId}:${id}`, mimeType: rec.mimeType, durationMs: rec.durationMs, createdAt: Date.now() };
+    onTake(base);
+    onChoose(id);
+    try {
+      const { transcript } = await keepAndTranscribe(rec, base.audioKey);
+      onTake({ ...base, transcript });
+    } catch (e) {
+      onTake({ ...base, error: (e as Error).message });
     }
   };
 
-  if (step && session && question) {
-    const nextStep = STEPS[STEPS.indexOf(step) + 1];
+  const done = Boolean(chosen?.transcript?.text.trim());
+
+  return (
+    <li className="relative pl-12">
+      <span
+        className={`absolute left-0 top-0 flex size-9 items-center justify-center rounded-full border text-[14px] font-semibold tabular transition-colors duration-200 ${
+          done ? "border-primary bg-primary text-primary-ink" : "border-line-strong bg-surface text-ink-2"
+        }`}
+      >
+        {done ? <Icon name="check" className="size-4" /> : index + 1}
+      </span>
+      <div className={`rounded-panel border bg-surface px-5 py-5 shadow-panel transition-colors duration-200 ${recording ? "border-pen/60" : "border-line"}`}>
+        <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+          <h3 className="text-[17px] font-semibold">
+            {part.title} <span className="text-[14px] font-medium text-ink-3">· {part.label}</span>
+          </h3>
+          <span className="text-[12px] text-ink-3 tabular">
+            목표 {part.targetSeconds[0]}~{part.targetSeconds[1]}초
+          </span>
+        </div>
+        <p className="mt-2 text-[14px] leading-relaxed text-ink-2">{part.hint}</p>
+        <button type="button" onClick={() => setShowFrames((v) => !v)} className="mt-2 inline-flex items-center gap-1 text-[13px] font-medium text-ink-2 hover:text-ink">
+          <Icon name="chevron" className={`size-3.5 transition-transform duration-200 ${showFrames ? "rotate-90" : ""}`} />
+          쓸 만한 틀
+        </button>
+        {showFrames && (
+          <ul className="rise mt-2 flex flex-col gap-1 rounded-ctl bg-wash px-4 py-3" lang="en">
+            {part.frames.map((f) => (
+              <li key={f} className="text-[14px] text-ink">
+                {f}
+              </li>
+            ))}
+          </ul>
+        )}
+
+        <div className="mt-4 flex flex-wrap items-center gap-3">
+          {recording ? (
+            <>
+              <Button onClick={() => void stop()}>
+                <Icon name="stop" className="size-3.5" />
+                녹음 끝내기
+              </Button>
+              <span className="inline-flex items-center gap-2 text-[14px] text-ink tabular">
+                <span className="size-2 animate-pulse rounded-full bg-pen" />
+                {formatClock((now - since) / 1000)}
+              </span>
+              <LevelBar stream={stream} active />
+            </>
+          ) : (
+            <Button variant={takes.length ? "secondary" : "primary"} onClick={start} disabled={busyElsewhere}>
+              <Icon name="mic" className="size-4" />
+              {takes.length ? "다시 녹음" : "녹음"}
+            </Button>
+          )}
+        </div>
+
+        {takes.length > 0 && (
+          <ul className="mt-4 flex flex-col gap-2 border-t border-line pt-4">
+            {takes.map((t, i) => {
+              const on = chosen?.id === t.id;
+              const stats = takeStats(t);
+              return (
+                <li
+                  key={t.id}
+                  className={`pop flex items-start gap-3 rounded-ctl border px-3 py-3 transition-colors duration-150 ${on ? "border-ink bg-surface" : "border-transparent bg-wash"}`}
+                >
+                  <button
+                    type="button"
+                    role="radio"
+                    aria-checked={on}
+                    aria-label={`${i + 1}번째 녹음 쓰기`}
+                    onClick={() => onChoose(t.id)}
+                    className={`mt-1 flex size-5 shrink-0 items-center justify-center rounded-full border-2 transition-colors ${on ? "border-ink" : "border-line-strong hover:border-ink-3"}`}
+                  >
+                    {on && <span className="size-2 rounded-full bg-ink" />}
+                  </button>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[12px] text-ink-3 tabular">
+                      {i + 1}번째 · {stats.seconds.toFixed(1)}초{t.transcript ? ` · ${stats.words}단어` : ""}
+                    </p>
+                    <p className="mt-0.5 text-[15px] leading-relaxed text-ink" lang="en">
+                      {t.transcript ? t.transcript.text || "(들리지 않음)" : t.error ? <span className="text-pen-ink">{t.error}</span> : <span className="inline-flex items-center gap-2 text-ink-3"><Spinner className="size-3.5" />받아쓰는 중</span>}
+                    </p>
+                  </div>
+                  <TakePlayer audioKey={t.audioKey} />
+                  <button
+                    type="button"
+                    onClick={() => onDelete(t)}
+                    aria-label={`${i + 1}번째 녹음 지우기`}
+                    className="flex size-8 shrink-0 items-center justify-center rounded-full text-ink-3 transition-colors hover:bg-pen-soft hover:text-pen-ink"
+                  >
+                    <Icon name="trash" className="size-4" />
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </div>
+    </li>
+  );
+}
+
+function Result({ drill }: { drill: StructureDrill }) {
+  const voices = useVoices();
+  const voice = useMemo(() => resolveVoice(voices), [voices]);
+  const fb = drill.feedback!;
+  const chosen = chosenTakes(drill);
+  return (
+    <section id="structure-result" className="rise mt-14 border-t border-line pt-8">
+      <h2 className="text-[20px] font-bold tracking-[-0.01em]">평가</h2>
+      <p className="mt-3 text-[16px] leading-[1.75] text-ink">{fb.overall}</p>
+      <ol className="mt-6 flex flex-col gap-3">
+        {FRAME.map((p) => {
+          const f = fb.parts.find((x) => x.part === p.id);
+          const t = chosen[p.id];
+          if (!f) return null;
+          const s = t ? takeStats(t) : null;
+          return (
+            <li key={p.id} className="rounded-panel border border-line bg-surface px-5 py-4 shadow-panel">
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-[16px] font-semibold">{p.title}</span>
+                <span className={`rounded-full border px-3 py-1 text-[13px] font-semibold ${VERDICT[f.verdict].tone}`}>{VERDICT[f.verdict].label}</span>
+              </div>
+              {s && (
+                <p className="mt-1 text-[12px] text-ink-3 tabular">
+                  {s.seconds.toFixed(1)}초 · {s.words}단어 (목표 {p.targetSeconds[0]}~{p.targetSeconds[1]}초)
+                </p>
+              )}
+              <p className="mt-3 text-[14px] leading-relaxed text-ink-2">
+                <b className="font-semibold text-ink">길이</b> {f.length}
+              </p>
+              <p className="mt-1 text-[14px] leading-relaxed text-ink-2">
+                <b className="font-semibold text-ink">내용</b> {f.content}
+              </p>
+              <p className="mt-3 flex items-start gap-2 rounded-ctl bg-wash px-3 py-2 text-[15px] leading-relaxed text-ink" lang="en">
+                <span className="min-w-0 flex-1">{f.better}</span>
+                <button type="button" onClick={() => speak(f.better, voice)} aria-label="들어보기" className="mt-0.5 shrink-0 text-ink-2 hover:text-ink">
+                  <Icon name="speaker" className="size-4" />
+                </button>
+              </p>
+            </li>
+          );
+        })}
+      </ol>
+      <div className="mt-6 rounded-panel border border-line bg-surface px-5 py-4 shadow-panel">
+        <p className="text-[14px] font-semibold text-ink">흐름</p>
+        <p className="mt-1 text-[14px] leading-relaxed text-ink-2">{fb.flow}</p>
+      </div>
+      <div className="mt-3 rounded-panel border border-line bg-surface px-5 py-4 shadow-panel">
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-[14px] font-semibold text-ink">네 단계를 이은 모범 답안</p>
+          <Button variant="secondary" onClick={() => speak(fb.model_answer, voice)}>
+            <Icon name="speaker" className="size-4" />
+            들어보기
+          </Button>
+        </div>
+        <p className="mt-3 text-[16px] leading-[1.8] text-ink" lang="en">
+          {fb.model_answer}
+        </p>
+      </div>
+    </section>
+  );
+}
+
+/** 문장 구조화 연습: choose a question, answer it in four separately recorded parts, have it judged as one. */
+export function StructureApp() {
+  const config = useConfig();
+  const toast = useToast();
+  const { level } = useAttempts();
+  const docs = useDocList<StructureSession>("session");
+  const voices = useVoices();
+  const voice = useMemo(() => resolveVoice(voices), [voices]);
+  const [type, setType] = useState<QuestionType>("describe");
+  const [topicId, setTopicId] = useState<string>("");
+  const [question, setQuestion] = useState<ExamQuestion | null>(null);
+  const [session, setSession] = useState<StructureSession | null>(null);
+  const latest = useRef<StructureSession | null>(null);
+  const [recordingPart, setRecordingPart] = useState<PartId | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  const topicsForType = TOPICS.filter((t) => typesOf(t).includes(type));
+
+  const begin = (q: ExamQuestion) => {
+    const s: StructureSession = {
+      id: newId(),
+      kind: "structure",
+      createdAt: Date.now(),
+      title: `${TYPE_LABEL[q.type]} · ${q.topicLabel}`,
+      settings: { type: q.type, topicId: q.topicId },
+      attempts: [],
+      structure: emptyDrill(),
+    };
+    latest.current = s;
+    setSession(s);
+    setQuestion(q);
+    setError("");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const update = (change: (d: StructureDrill) => StructureDrill) => {
+    const cur = latest.current;
+    if (!cur) return;
+    const next = { ...cur, structure: change(cur.structure) };
+    latest.current = next;
+    setSession(next);
+    void docs.save(next.id, next);
+  };
+
+  const evaluate = async () => {
+    const cur = latest.current;
+    if (!cur || !question) return;
+    setBusy(true);
+    setError("");
+    try {
+      const available = config.models.filter((m) => m.available).map((m) => m.id);
+      const { feedback, modelId } = await requestStructureFeedback({ ref: cur.id, question, drill: cur.structure, level, available });
+      update((d) => ({ ...d, feedback, modelId }));
+      toast("평가를 마쳤습니다");
+      window.setTimeout(() => document.getElementById("structure-result")?.scrollIntoView({ behavior: "smooth", block: "start" }), 80);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (question && session) {
+    const drill = session.structure;
+    const recorded = FRAME.filter((p) => chosenTakes(drill)[p.id]?.transcript?.text.trim()).length;
+    const ready = readyToEvaluate(drill);
     return (
       <AppShell>
         <Page>
-          <PageHead title={step.title} lead={`${STEPS.indexOf(step) + 1}단계 / ${STEPS.length}단계. 이 단계에만 집중해서 답하세요. 나머지는 짧게 봅니다.`}>
-            <button type="button" onClick={() => (setStep(null), setSession(null), setQuestion(null))} className="mt-4 text-[14px] text-ink-2 underline underline-offset-4 hover:text-ink">
-              단계 고르기
-            </button>
-          </PageHead>
-          <div className="mt-10 flex flex-col gap-8">
-            <StepGuide step={step} />
+          <PageHead
+            title="문장 구조화 연습"
+            lead="네 단계를 하나씩 따로 녹음하세요. 같은 단계를 몇 번이고 다시 녹음하고, 마음에 드는 녹음을 고를 수 있습니다."
+            back={<BackButton onClick={() => (setQuestion(null), setSession(null))}>유형·주제 다시 고르기</BackButton>}
+          />
+
+          <div className="rise mt-8 rounded-panel border border-line bg-surface px-6 py-6 shadow-panel">
+            <p className="text-[13px] text-ink-3">
+              {TYPE_LABEL[question.type]} · {question.topicLabel}
+            </p>
+            <p className="mt-2 text-[18px] font-medium leading-[1.6] text-ink" lang="en">
+              {question.text}
+            </p>
+            <div className="mt-4 flex flex-wrap gap-2">
+              <Button variant="secondary" onClick={() => speak(question.text, voice)}>
+                <Icon name="speaker" className="size-4" />
+                질문 듣기
+              </Button>
+              <Button variant="quiet" onClick={() => begin(practiceQuestion({ type: question.type, topicId: topicId || undefined, avoid: question.text }))}>
+                <Icon name="replay" className="size-4" />
+                다른 질문
+              </Button>
+            </div>
+          </div>
+
+          <div className="mt-8">
             <MicGate>
               {(stream) => (
-                <PracticeRunner
-                  key={`${session.id}:${number}`}
-                  docId={session.id}
-                  kind="session"
-                  number={number}
-                  source="structure"
-                  question={question}
-                  lens={step.lens}
-                  level={level}
-                  stream={stream}
-                  onAttempt={record}
-                  header={(a) => <Verdict step={step} attempt={a} />}
-                  after={
-                    <div className="flex flex-wrap gap-2 border-t border-line pt-6">
-                      <Button
-                        onClick={() => {
-                          setQuestion(ask(step, question.text));
-                          setNumber((n) => n + 1);
-                          window.scrollTo({ top: 0 });
-                        }}
-                      >
-                        같은 단계 한 번 더
-                      </Button>
-                      {nextStep && (
-                        <Button variant="secondary" onClick={() => start(nextStep)}>
-                          다음 단계: {nextStep.title}
-                        </Button>
-                      )}
-                      <Link href={`/sessions/${session.id}`} className="inline-flex h-11 items-center rounded-ctl px-5 text-[15px] font-semibold text-ink-2 hover:text-ink">
-                        이번 연습 모아 보기
-                      </Link>
-                    </div>
-                  }
-                />
+                <ol className="relative flex flex-col gap-5 before:absolute before:bottom-6 before:left-[17px] before:top-6 before:w-px before:bg-line">
+                  {FRAME.map((p, i) => (
+                    <PartCard
+                      key={`${session.id}:${p.id}`}
+                      index={i}
+                      part={p}
+                      drill={drill}
+                      sessionId={session.id}
+                      stream={stream}
+                      busyElsewhere={recordingPart !== null && recordingPart !== p.id}
+                      onBusy={(b) => setRecordingPart(b ? p.id : null)}
+                      onTake={(t) => update((d) => withTake(d, p.id, t))}
+                      onChoose={(id) => update((d) => ({ ...d, chosen: { ...d.chosen, [p.id]: id } }))}
+                      onDelete={(t) => {
+                        void deleteAudio(t.audioKey).catch(() => {});
+                        update((d) => {
+                          const parts = { ...d.parts, [p.id]: d.parts[p.id].filter((x) => x.id !== t.id) };
+                          const chosen = { ...d.chosen };
+                          if (chosen[p.id] === t.id) delete chosen[p.id];
+                          return { ...d, parts, chosen };
+                        });
+                        toast("녹음을 지웠습니다", "info");
+                      }}
+                    />
+                  ))}
+                </ol>
               )}
             </MicGate>
           </div>
+
+          <div className="sticky bottom-4 z-10 mt-8 flex flex-wrap items-center justify-between gap-4 rounded-panel border border-line bg-surface/95 px-5 py-4 shadow-panel backdrop-blur">
+            <div className="min-w-[160px] flex-1">
+              <p className="text-[14px] font-semibold text-ink tabular">{recorded}/4 단계 녹음</p>
+              <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-line">
+                <div className="h-full rounded-full bg-primary transition-[width] duration-500 ease-out" style={{ width: `${(recorded / 4) * 100}%` }} />
+              </div>
+            </div>
+            <Button size="lg" onClick={() => void evaluate()} disabled={!ready || busy || recordingPart !== null}>
+              {busy ? <Spinner /> : <Icon name="sparkle" className="size-4" />}
+              {drill.feedback ? "다시 평가" : "평가"}
+            </Button>
+          </div>
+          {error && (
+            <p role="alert" className="mt-4 rounded-panel border border-pen/30 bg-pen-soft px-5 py-4 text-[15px] leading-relaxed text-pen-ink">
+              {error}
+            </p>
+          )}
+
+          {drill.feedback && <Result drill={drill} />}
         </Page>
       </AppShell>
     );
   }
 
-  const history = [
-    ...mine.map((s) => ({ id: s.id, title: s.title ?? "구조화 연습", at: s.createdAt, n: s.attempts.length })),
-    ...docs.remote.flatMap((r) => (r.summary.kind === "structure" ? [{ id: r.id, title: String(r.summary.title ?? "구조화 연습"), at: Number(r.summary.createdAt ?? r.updatedAt), n: Number(r.summary.attemptCount ?? 0) }] : [])),
-  ].sort((a, b) => b.at - a.at);
-
   return (
     <AppShell>
       <Page>
-        <PageHead title="문장 구조화 연습" lead="바로 답하기, 이유, 예시, 내 생각. 답변의 뼈대를 한 단계씩 천천히 쌓아 말합니다. 단계마다 그 부분만 집중해서 봅니다." />
-        <Block title="단계" aside={`${passed.size}/${STEPS.length} 통과`}>
-          <ol className="border-t border-line">
-            {STEPS.map((s, i) => (
-              <li key={s.id} className="flex items-center gap-5 border-b border-line py-5">
-                <span className="flex size-9 shrink-0 items-center justify-center rounded-full border border-line-strong text-[14px] font-semibold tabular">{i + 1}</span>
-                <span className="min-w-0 flex-1">
-                  <span className="flex items-center gap-2 text-[17px] font-semibold">
-                    {s.title}
-                    {passed.has(s.id) && <span className="text-[13px] font-medium text-good">통과</span>}
-                  </span>
-                  <span className="mt-1 block text-[14px] leading-relaxed text-ink-2">{s.explain}</span>
-                </span>
-                <Button variant={passed.has(s.id) ? "secondary" : "primary"} onClick={() => start(s)} aria-label={`${s.title} 연습하기`}>
-                  연습
-                </Button>
-              </li>
+        <PageHead
+          title="문장 구조화 연습"
+          lead="두괄식 → 이유 → 예시 → 감정·생각. 질문 하나를 네 단계로 나눠 한 단계씩 말하고, 다 말하면 AI가 단계마다 길이와 내용을 함께 평가합니다."
+        />
+
+        <Block title="문제 유형">
+          <div className="flex flex-wrap gap-2">
+            {PRACTICE_TYPES.map((t) => (
+              <Chip key={t} on={type === t} onClick={() => (setType(t), setTopicId(""))}>
+                {TYPE_LABEL[t]}
+              </Chip>
             ))}
-          </ol>
+          </div>
         </Block>
-        {history.length > 0 && (
-          <Block title="지난 연습">
-            <ul className="border-t border-line">
-              {history.slice(0, 20).map((h) => (
-                <HistoryRow key={h.id} href={`/sessions/${h.id}`} title={h.title} meta={`${formatDay(h.at)} · ${h.n}문항`} />
-              ))}
-            </ul>
-          </Block>
-        )}
+
+        <Block title="주제" aside={topicId ? topicById(topicId)?.label : "아무 주제"}>
+          <div className="flex flex-wrap gap-2">
+            <Chip on={!topicId} onClick={() => setTopicId("")}>
+              아무 주제
+            </Chip>
+            {topicsForType.map((t) => (
+              <Chip key={t.id} on={topicId === t.id} onClick={() => setTopicId(t.id)}>
+                {t.label}
+              </Chip>
+            ))}
+          </div>
+        </Block>
+
+        <div className="sticky bottom-4 z-10 mt-10 flex justify-end">
+          <Button size="lg" onClick={() => begin(practiceQuestion({ type, topicId: topicId || undefined }))}>
+            질문 받기
+            <Icon name="arrow" className="size-4" />
+          </Button>
+        </div>
+
+        <Block title="지난 기록" aside="서비스 준비 중">
+          <p className="rounded-panel border border-dashed border-line-strong px-5 py-6 text-center text-[14px] leading-relaxed text-ink-3">
+            지난 구조화 연습을 다시 불러오는 기능을 준비하고 있습니다. 연습한 내용은 지금도 저장되고 있어, 기능이 열리면 그대로 볼 수 있습니다.
+          </p>
+        </Block>
       </Page>
     </AppShell>
   );

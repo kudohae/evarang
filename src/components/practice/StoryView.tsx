@@ -6,7 +6,7 @@ import { AppShell } from "@/components/AppShell";
 import { PracticeRunner } from "@/components/practice/PracticeRunner";
 import { attemptAnswer, attemptQuestion, Block, formatDay, MicGate, Page, PageHead } from "@/components/practice/parts";
 import { QuestionDetail } from "@/components/report/QuestionDetail";
-import { Button, Icon, Spinner } from "@/components/ui";
+import { BackButton, Button, Icon, Spinner } from "@/components/ui";
 import { resolveVoice, speak, useVoices } from "@/lib/client/audio";
 import { topicById } from "@/lib/content/topics";
 import type { Attempt } from "@/lib/domain/attempt";
@@ -15,9 +15,10 @@ import { localDocs } from "@/lib/docs/local";
 import { syncEnabled } from "@/lib/docs/policy";
 import { loadDoc, scheduleSync } from "@/lib/docs/sync";
 import { practiceQuestion } from "@/lib/practice/questions";
-import { stepById } from "@/lib/practice/structure";
 import type { StoryDoc } from "@/lib/stories/schema";
 import type { ExamQuestion } from "@/lib/types";
+
+const PART_TITLE: Record<string, string> = { opening: "바로 답하기", reason: "이유", example: "예시·경험", closing: "생각·감정으로 마무리" };
 
 /** One story: the text (editable), its skeleton, phrases to keep, and speaking practice on its topics. */
 export function StoryView({ id }: { id: string }) {
@@ -84,11 +85,7 @@ export function StoryView({ id }: { id: string }) {
   return (
     <AppShell>
       <Page>
-        <PageHead title={story.title} lead={`${story.level} 목표 · ${formatDay(story.createdAt)}`}>
-          <a href="/stories" className="mt-4 inline-block text-[14px] text-ink-2 underline underline-offset-4 hover:text-ink">
-            스토리뱅크로 돌아가기
-          </a>
-        </PageHead>
+        <PageHead title={story.title} lead={`${story.level} 목표 · ${formatDay(story.createdAt)}`} back={<BackButton href="/stories">스토리뱅크</BackButton>} />
 
         <Block title="이야기">
           {editing ? (
@@ -145,7 +142,7 @@ export function StoryView({ id }: { id: string }) {
             <ol className="flex flex-col gap-3">
               {story.outline.map((o, i) => (
                 <li key={i} className="rounded-panel border border-line bg-surface px-5 py-4 shadow-panel">
-                  <p className="text-[13px] font-semibold text-ink-3">{stepById(o.part)?.title ?? o.part}</p>
+                  <p className="text-[13px] font-semibold text-ink-3">{PART_TITLE[o.part] ?? o.part}</p>
                   <p className="mt-1 text-[15px] leading-relaxed text-ink" lang="en">
                     {o.text}
                   </p>

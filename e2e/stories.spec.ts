@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { blockFonts, mockFeedback, mockTranscribe } from "./fixtures";
+import { blockFonts, connectMic, mockFeedback, mockTranscribe } from "./fixtures";
 
 const STORY = {
   id: "storyseed01",
@@ -63,7 +63,7 @@ test("a story shows its parts and can be practised", async ({ page }) => {
   await expect(page.getByText("with my sister.")).toBeVisible();
 
   await page.getByRole("button", { name: "해변 가기", exact: true }).click();
-  await page.getByRole("button", { name: "마이크 연결" }).click();
+  await connectMic(page);
   await page.getByRole("button", { name: "질문 듣기" }).click();
   const next = page.getByRole("button", { name: "다음" });
   await expect(next).toBeEnabled({ timeout: 120_000 });

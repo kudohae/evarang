@@ -5,7 +5,7 @@ import { useMemo, useRef, useState } from "react";
 import { AppShell } from "@/components/AppShell";
 import { PracticeRunner } from "@/components/practice/PracticeRunner";
 import { Block, formatDay, HistoryRow, MicGate, Page, PageHead } from "@/components/practice/parts";
-import { Button } from "@/components/ui";
+import { BackButton, Button } from "@/components/ui";
 import { TOPICS, topicById } from "@/lib/content/topics";
 import type { Attempt } from "@/lib/domain/attempt";
 import { skillProfile, suggestLens } from "@/lib/domain/profile";
@@ -76,11 +76,11 @@ export function PracticeApp() {
     return (
       <AppShell>
         <Page>
-          <PageHead title={titleOf(setting)} lead={`${question.topicLabel} · ${TYPE_LABEL[question.type]}. 질문은 몇 번이고 다시 듣고, 글자로 볼 수도 있습니다. 마음에 들지 않으면 다시 말하세요.`}>
-            <button type="button" onClick={() => (setSetting(null), setSession(null), setQuestion(null))} className="mt-4 text-[14px] text-ink-2 underline underline-offset-4 hover:text-ink">
-              다른 연습 고르기
-            </button>
-          </PageHead>
+          <PageHead
+            title={titleOf(setting)}
+            lead={`${question.topicLabel} · ${TYPE_LABEL[question.type]}. 질문은 몇 번이고 다시 듣고, 글자로 볼 수도 있습니다. 마음에 들지 않으면 다시 말하세요.`}
+            back={<BackButton onClick={() => (setSetting(null), setSession(null), setQuestion(null))}>다른 연습 고르기</BackButton>}
+          />
           <div className="mt-10">
             <MicGate>
               {(stream) => (

@@ -86,9 +86,31 @@ export async function mockFeedback(page: Page) {
   const overall = (route: Route) => route.fulfill({ json: { overall: OVERALL, usage: USAGE } });
   await page.route("**/api/feedback/answers", answer);
   await page.route("**/api/feedback/overall", overall);
+  await page.route("**/api/feedback/structure", async (route: Route) => {
+    const body = route.request().postDataJSON() as { ref?: string; parts: { part: string }[] };
+    if (!body.ref || body.parts?.length !== 4) return route.fulfill({ status: 400, json: { error: "요청 형식이 올바르지 않습니다.", kind: "invalid" } });
+    await route.fulfill({
+      json: {
+        feedback: {
+          parts: body.parts.map((p, i) => ({ part: p.part, verdict: (["good", "ok", "weak", "good"] as const)[i], length: "적당한 길이입니다.", content: "역할에 맞습니다.", better: `Better ${p.part} sentence.` })),
+          flow: "이유와 예시가 잘 이어집니다.",
+          overall: "두괄식이 분명합니다. 예시를 더 구체적으로 말해 보세요.",
+          model_answer: "I'd say my favorite place is the park near my home.",
+        },
+        usage: USAGE,
+      },
+    });
+  });
 }
 
 /** Webfonts come from a CDN; the tests do not need them. */
 export async function blockFonts(page: Page) {
   await page.route(/cdn\.jsdelivr\.net/, (route) => route.abort());
+}
+
+/** Connects the microphone if the page still asks; with permission already granted it connects by itself. */
+export async function connectMic(page: Page) {
+  const button = page.getByRole("button", { name: "마이크 연결" });
+  await page.waitForTimeout(300);
+  if (await button.isVisible()) await button.click();
 }

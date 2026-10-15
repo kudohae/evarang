@@ -10,9 +10,11 @@ import type { AnswerRecord, ExamQuestion } from "@/lib/types";
 
 /* Pieces every practice screen shares, so the four features look like one site. */
 
-export function PageHead({ title, lead, children }: { title: string; lead: ReactNode; children?: ReactNode }) {
+/** `back`: a BackButton shown above the title. */
+export function PageHead({ title, lead, children, back }: { title: string; lead: ReactNode; children?: ReactNode; back?: ReactNode }) {
   return (
-    <header className="rise pt-12 md:pt-16">
+    <header className="rise pt-10 md:pt-14">
+      {back && <div className="mb-6">{back}</div>}
       <h1 className="text-[30px] font-bold leading-[1.25] tracking-[-0.03em] md:text-[36px]">{title}</h1>
       <p className="mt-4 max-w-[600px] text-[16px] leading-[1.7] text-ink-2">{lead}</p>
       {children}

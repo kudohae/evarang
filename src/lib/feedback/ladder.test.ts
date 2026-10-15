@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { BusyNow, OutForToday, QuotaReached, runOnLadder } from "@/lib/feedback/ladder";
 import { ApiError } from "@/lib/http";
-import { MODELS } from "@/lib/models";
+import { MODELS, OWN_MODELS } from "@/lib/models";
 
 const ALL = MODELS.map((m) => m.id);
 const err = (kind: string) => new ApiError(429, { error: kind, kind });
@@ -58,5 +58,25 @@ describe("runOnLadder", () => {
       return id;
     });
     expect(calls).toEqual(["gemini-3.6-flash"]);
+  });
+
+  it("a member's own key comes first, then the shared free models", async () => {
+    const calls: string[] = [];
+    const all = [...ALL, ...OWN_MODELS.map((m) => m.id)];
+    await runOnLadder(all, "full", async (id) => {
+      calls.push(id);
+      if (id.startsWith("own:")) throw new OutForToday(err("daily"));
+      return id;
+    });
+    expect(calls).toEqual([...OWN_MODELS.map((m) => m.id), "gemini-3.8-flash"]);
+  });
+
+  it("light work starts at Flash-Lite in both groups", async () => {
+    const calls: string[] = [];
+    await runOnLadder([...ALL, ...OWN_MODELS.map((m) => m.id)], "light", async (id) => {
+      calls.push(id);
+      throw new OutForToday(err("daily"));
+    }).catch(() => {});
+    expect(calls).toEqual(["own:gemini-3.5-flash-lite", "gemini-3.5-flash-lite", "groq-gpt-oss"]);
   });
 });

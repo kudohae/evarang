@@ -144,7 +144,7 @@ async function clientIp(): Promise<string> {
 }
 
 /** Counts an attempt against `key`; throws once `limit` is reached within the window. */
-async function limit(key: string, max: number, windowMinutes: number): Promise<void> {
+export async function limit(key: string, max: number, windowMinutes: number): Promise<void> {
   const db = await sql();
   const rows = (await db`
     INSERT INTO auth_attempts (key, count, reset_at) VALUES (${key}, 1, now() + make_interval(mins => ${windowMinutes}))
@@ -220,12 +220,17 @@ export async function signOut(): Promise<void> {
 
 // ── Accounts ───────────────────────────────────────────────
 
-export async function signUp(input: { email: string; password: string; nickname: string }): Promise<void> {
+/** Creates the account and signs it in; `beforeCreate` runs after the input checks, before anything is written. */
+export async function signUp(
+  input: { email: string; password: string; nickname: string },
+  hooks: { beforeCreate?: () => Promise<void>; afterCreate?: (userId: string) => Promise<void> } = {},
+): Promise<void> {
   const email = normalizeEmail(input.email);
   checkEmail(email);
   checkPassword(input.password, email);
   const nickname = checkNickname(input.nickname);
   await limit(`signup:${await clientIp()}`, 10, 60);
+  await hooks.beforeCreate?.();
   const db = await sql();
   const id = randomBytes(12).toString("base64url");
   const rows = (await db`
@@ -234,6 +239,7 @@ export async function signUp(input: { email: string; password: string; nickname:
     ON CONFLICT (email) DO NOTHING
     RETURNING id`) as { id: string }[];
   if (!rows.length) throw new AuthError("이미 가입된 이메일입니다.", 409);
+  await hooks.afterCreate?.(id);
   await startSession(id);
 }
 

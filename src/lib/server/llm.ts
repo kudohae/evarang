@@ -1,6 +1,6 @@
 import { GoogleGenAI } from "@google/genai";
 import { z } from "zod";
-import type { ModelOption, Provider, Usage } from "@/lib/models";
+import { baseModelId, OWN_MODELS, type ModelOption, type Provider, type Usage } from "@/lib/models";
 
 /**
  * kind "rate": a per-minute limit or a busy server; the same model works again after `retryAfter` seconds.
@@ -24,6 +24,9 @@ type Request<T> = {
   system: string;
   user: string;
   schema: z.ZodType<T>;
+  /** A member's own key, for own-key models; `owner` (their user id) keeps their quota memory apart. */
+  apiKey?: string;
+  owner?: string;
 };
 
 export type LlmResult<T> = { data: T; usage: Usage };
@@ -38,22 +41,30 @@ export function providerConfigured(p: Provider): boolean {
 }
 
 // A warm server instance remembers which models are out for the day, so later requests skip them without a round trip.
+// Own-key models are remembered per member: one member's spent or refused key says nothing about anyone else's.
 const outUntil = new Map<string, number>();
+const outKey = (m: ModelOption, owner?: string) => (m.own ? `${owner ?? ""}:${m.id}` : m.id);
 
-export function modelAvailable(m: ModelOption): boolean {
-  return providerConfigured(m.provider) && (outUntil.get(m.id) ?? 0) < Date.now();
+/** For own-key models pass the member's id; whether they have a key at all is the caller's question. */
+export function modelAvailable(m: ModelOption, owner?: string): boolean {
+  return (m.own || providerConfigured(m.provider)) && (outUntil.get(outKey(m, owner)) ?? 0) < Date.now();
 }
 
-function dailyLimit(model: ModelOption, retrySeconds: number | undefined): LlmError {
-  outUntil.set(model.id, Date.now() + Math.min(retrySeconds ?? 3600, 86_400) * 1000);
-  return new LlmError(`${model.label}의 오늘 무료 한도를 다 썼습니다.`, 429, "daily", retrySeconds);
+/** After a member saves a new key: their earlier refusals and spent quotas no longer apply. */
+export function forgetOwnLimits(owner: string): void {
+  for (const m of OWN_MODELS) outUntil.delete(outKey(m, owner));
+}
+
+function dailyLimit(model: ModelOption, retrySeconds: number | undefined, owner?: string, message?: string): LlmError {
+  outUntil.set(outKey(model, owner), Date.now() + Math.min(retrySeconds ?? 3600, 86_400) * 1000);
+  return new LlmError(message ?? `${model.label}의 오늘 무료 한도를 다 썼습니다.`, 429, "daily", retrySeconds);
 }
 
 export async function generate<T>(req: Request<T>): Promise<LlmResult<T>> {
-  if (!providerConfigured(req.model.provider)) {
-    throw new LlmError(`${req.model.label}의 API 키가 서버에 설정되지 않았습니다.`, 400, "daily");
+  if (req.model.own ? !req.apiKey : !providerConfigured(req.model.provider)) {
+    throw new LlmError(`${req.model.label}의 API 키가 ${req.model.own ? "없습니다" : "서버에 설정되지 않았습니다"}.`, 400, "daily");
   }
-  if (!modelAvailable(req.model)) throw new LlmError(`${req.model.label}의 오늘 무료 한도를 다 썼습니다.`, 429, "daily");
+  if (!modelAvailable(req.model, req.owner)) throw new LlmError(`${req.model.label}의 오늘 한도를 다 썼습니다.`, 429, "daily");
   switch (req.model.provider) {
     case "gemini":
       return withRetry(() => gemini(req));
@@ -85,10 +96,11 @@ let geminiClient: GoogleGenAI | null = null;
 
 async function gemini<T>(req: Request<T>): Promise<LlmResult<T>> {
   geminiClient ??= new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+  const client = req.apiKey ? new GoogleGenAI({ apiKey: req.apiKey }) : geminiClient;
   let res;
   try {
-    res = await geminiClient.models.generateContent({
-      model: req.model.id,
+    res = await client.models.generateContent({
+      model: baseModelId(req.model.id),
       contents: req.user,
       config: {
         systemInstruction: req.system,
@@ -97,7 +109,7 @@ async function gemini<T>(req: Request<T>): Promise<LlmResult<T>> {
       },
     });
   } catch (e) {
-    throw geminiError(req.model, e);
+    throw geminiError(req.model, e, req.owner);
   }
   const data = parseJson(res.text ?? "", req.schema);
   const u = res.usageMetadata;
@@ -110,17 +122,22 @@ async function gemini<T>(req: Request<T>): Promise<LlmResult<T>> {
   };
 }
 
-function geminiError(model: ModelOption, e: unknown): LlmError {
+export function geminiError(model: ModelOption, e: unknown, owner?: string): LlmError {
   const msg = e instanceof Error ? e.message : String(e);
   const status = (e as { status?: number }).status;
+  // A member's key that Gemini refuses: skip it for today and let the ladder move on to the site's models.
+  if (model.own && (status === 401 || status === 403 || /API_KEY_INVALID|API key not valid|PERMISSION_DENIED/i.test(msg))) {
+    for (const m of OWN_MODELS) if (m.provider === model.provider) dailyLimit(m, 86_400, owner);
+    return dailyLimit(model, 86_400, owner, "내 API 키가 거부되었습니다. 내 정보에서 키를 확인하세요.");
+  }
   if (status === 429 || /RESOURCE_EXHAUSTED/.test(msg)) {
     const after = parseDuration(/retry in ([\dhms.]+)/i.exec(msg)?.[1] ?? /"retryDelay":\s*"([\d.]+s)"/.exec(msg)?.[1] ?? "");
     // A per-day quota, a zero allowance, or a wait longer than a couple of minutes all mean this model is done for today.
-    if (/PerDay/i.test(msg) || /limit: 0\b/.test(msg) || (after ?? 0) > 120) return dailyLimit(model, after);
+    if (/PerDay/i.test(msg) || /limit: 0\b/.test(msg) || (after ?? 0) > 120) return dailyLimit(model, after, owner);
     return new LlmError(`${model.label}의 분당 한도에 걸렸습니다.`, 429, "rate", after ?? 20);
   }
   if (status === 503 || /UNAVAILABLE|overloaded/i.test(msg)) return new LlmError(`${model.label} 서버가 바쁩니다.`, 503, "rate", 8);
-  if (status === 404 || /NOT_FOUND/.test(msg)) return dailyLimit(model, 86_400);
+  if (status === 404 || /NOT_FOUND/.test(msg)) return dailyLimit(model, 86_400, owner);
   return new LlmError(`Gemini 오류: ${msg.slice(0, 300)}`);
 }
 

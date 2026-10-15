@@ -1,4 +1,6 @@
 import { guard } from "@/lib/server/access";
+import type { AiProviderId } from "@/lib/ai-providers";
+import { aiKeysConfigured, checkKeyInput, storeKey, verifyKey } from "@/lib/server/ai-keys";
 import { AuthError, handle, signUp } from "@/lib/server/auth";
 
 export async function POST(request: Request) {
@@ -7,7 +9,14 @@ export async function POST(request: Request) {
   return handle(async () => {
     const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
     if (body.agree !== true || body.age !== true) throw new AuthError("필수 항목에 동의해야 가입할 수 있습니다.");
-    await signUp({ email: String(body.email ?? ""), password: String(body.password ?? ""), nickname: String(body.nickname ?? "") });
+    // The AI key is optional; when given, it must work before the account is made.
+    const wantsKey = aiKeysConfigured() && typeof body.aiKey === "string" && body.aiKey.trim() !== "";
+    const provider = String(body.aiProvider ?? "gemini") as AiProviderId;
+    const key = wantsKey ? checkKeyInput(body.aiKey) : "";
+    await signUp(
+      { email: String(body.email ?? ""), password: String(body.password ?? ""), nickname: String(body.nickname ?? "") },
+      wantsKey ? { beforeCreate: () => verifyKey(provider, key), afterCreate: (id) => storeKey(id, provider, key) } : {},
+    );
     return Response.json({ ok: true });
   });
 }

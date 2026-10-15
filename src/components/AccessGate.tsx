@@ -11,7 +11,9 @@ export type Config = {
   research: boolean;
   /** Accounts are available (a database is configured). */
   auth: boolean;
-  user: { email: string; nickname: string; createdAt: string; recordsConsent: boolean } | null;
+  user: { email: string; nickname: string; createdAt: string; recordsConsent: boolean; aiKey?: { provider: string; hint: string } | null } | null;
+  /** Members can bring their own AI key (the server has a secret to encrypt it). */
+  aiKeys?: boolean;
   models: { id: string; available: boolean }[];
   /** Which storage the server has. Without a blob store, recordings stay in the browser. */
   storage?: { database: boolean; blob: boolean };

@@ -4,6 +4,8 @@ import type { EvalContext } from "@/lib/feedback/prompt";
 import { modelById, type ModelOption } from "@/lib/models";
 import type { ActionId } from "@/lib/metering/actions";
 import { apiError } from "@/lib/server/api-error";
+import { memberKey } from "@/lib/server/ai-keys";
+import { currentUser } from "@/lib/server/auth";
 import { meter, MeterError } from "@/lib/server/meter";
 
 const Body = z.object({
@@ -34,7 +36,8 @@ const Body = z.object({
   }),
 });
 
-export type FeedbackRequest = { model: ModelOption; lens: Lens; ref: string; context: EvalContext };
+/** `apiKey`/`owner`: set for own-key models — the signed-in member's key and id. */
+export type FeedbackRequest = { model: ModelOption; lens: Lens; ref: string; context: EvalContext; apiKey?: string; owner?: string };
 
 /** `maxItems`: answers come in batches of up to 8; the overall verdict reads the whole test. */
 export async function readFeedbackRequest(request: Request, maxItems: number): Promise<FeedbackRequest | Response> {
@@ -45,7 +48,13 @@ export async function readFeedbackRequest(request: Request, maxItems: number): P
   const lensId = (parsed.data.lens ?? "exam") as LensId;
   const lens = Object.hasOwn(LENSES, lensId) ? LENSES[lensId] : undefined;
   if (!lens) return apiError(400, "알 수 없는 피드백 종류입니다.", { kind: "invalid" });
-  return { model, lens, ref: parsed.data.ref, context: parsed.data.context as unknown as EvalContext };
+  const base = { model, lens, ref: parsed.data.ref, context: parsed.data.context as unknown as EvalContext };
+  if (!model.own) return base;
+  // An own-key model without a signed-in member who has a key: "out for today", so the ladder moves on.
+  const user = await currentUser().catch(() => null);
+  const apiKey = user ? await memberKey(user.id, model.provider).catch(() => null) : null;
+  if (!user || !apiKey) return apiError(400, "내 API 키가 없습니다.", { kind: "daily" });
+  return { ...base, apiKey, owner: user.id };
 }
 
 /** Mock-test grading counts once per test; other feedback counts per answer. */
@@ -56,6 +65,8 @@ function actionFor(req: FeedbackRequest): { action: ActionId; units: number } {
 
 /** Counts the request against today's free allowance; a Response when it is spent. */
 export async function meterFeedback(req: FeedbackRequest): Promise<Response | null> {
+  // The member pays their own provider; the site's free allowance is not involved.
+  if (req.model.own) return null;
   const { action, units } = actionFor(req);
   try {
     await meter(action, units, req.ref);

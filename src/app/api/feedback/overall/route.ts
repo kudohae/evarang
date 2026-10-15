@@ -19,6 +19,8 @@ export async function POST(request: Request) {
       model: req.model,
       system: overallSystemPrompt(),
       user: overallUserPrompt(req.context),
+      apiKey: req.apiKey,
+      owner: req.owner,
       schema: OverallSchema,
     });
     return Response.json({ overall: data, usage });

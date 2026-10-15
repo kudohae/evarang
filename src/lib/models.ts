@@ -4,6 +4,8 @@ export type ModelOption = {
   id: string;
   provider: Provider;
   label: string;
+  /** Runs on the signed-in member's own API key instead of the site's free quota. */
+  own?: boolean;
 };
 
 /**
@@ -19,6 +21,20 @@ export const MODELS: ModelOption[] = [
   { id: "groq-gpt-oss", provider: "groq", label: "GPT-OSS 120B · Groq" },
 ];
 
+const OWN = "own:";
+
+/** The same Gemini models on a member's own key: tried before the shared ones, and not counted against free limits. */
+export const OWN_MODELS: ModelOption[] = MODELS.filter((m) => m.provider === "gemini").map((m) => ({ ...m, id: `${OWN}${m.id}`, label: `${m.label} · 내 키`, own: true }));
+
+export function isOwnModel(id: string): boolean {
+  return id.startsWith(OWN);
+}
+
+/** The provider's model name behind an own-key id. */
+export function baseModelId(id: string): string {
+  return isOwnModel(id) ? id.slice(OWN.length) : id;
+}
+
 /** Models earlier versions graded with; kept so old reports still show a readable name. */
 const RETIRED: Record<string, string> = {
   "groq-llama": "Llama 3.3 70B · Groq",
@@ -29,7 +45,7 @@ const RETIRED: Record<string, string> = {
 };
 
 export function modelById(id: string): ModelOption | undefined {
-  return MODELS.find((m) => m.id === id);
+  return MODELS.find((m) => m.id === id) ?? OWN_MODELS.find((m) => m.id === id);
 }
 
 export function modelLabel(id: string): string {

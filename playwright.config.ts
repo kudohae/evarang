@@ -33,6 +33,6 @@ export default defineConfig({
     url: `http://localhost:${PORT}/api/config`,
     reuseExistingServer: false,
     timeout: 120_000,
-    env: { ACCESS_CODE: "", DATABASE_URL: "", POSTGRES_URL: "", BLOB_STORE_ID: "", BLOB_READ_WRITE_TOKEN: "", ASSEMBLYAI_API_KEY: "test", GEMINI_API_KEY: "test" },
+    env: { NEXT_BROWSER_LOGS: "off", ACCESS_CODE: "", DATABASE_URL: "", POSTGRES_URL: "", BLOB_STORE_ID: "", BLOB_READ_WRITE_TOKEN: "", ASSEMBLYAI_API_KEY: "test", GEMINI_API_KEY: "test" },
   },
 });

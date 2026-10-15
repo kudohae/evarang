@@ -19,6 +19,8 @@ export async function POST(request: Request) {
       model: req.model,
       system: answersSystemPrompt(req.lens),
       user: answersUserPrompt(req.context),
+      apiKey: req.apiKey,
+      owner: req.owner,
       schema: AnswerBatchSchema,
     });
     return Response.json({ items: data.items, usage });

@@ -1,5 +1,5 @@
 import { ApiError, request } from "@/lib/http";
-import { MODELS, type Usage } from "@/lib/models";
+import { MODELS, OWN_MODELS, type Usage } from "@/lib/models";
 
 /*
   The free model ladder shared by every feature that asks for feedback.
@@ -49,11 +49,16 @@ export async function postFeedback<T>(path: string, body: unknown, spill: () => 
   }
 }
 
-/** Models to try, in order. Light work starts at Flash-Lite and never spends the bigger models' small quotas. */
+/**
+ * Models to try, in order: the member's own key first, then the site's free models. Light work starts at
+ * Flash-Lite in each group and never spends the bigger models' small quotas.
+ */
 function ladder(available: string[], weight: "full" | "light"): string[] {
-  const ids = MODELS.map((m) => m.id);
-  const from = weight === "light" ? Math.max(0, ids.indexOf(LIGHT_START)) : 0;
-  return ids.slice(from).filter((id) => available.includes(id));
+  return [OWN_MODELS, MODELS].flatMap((group) => {
+    const ids = group.map((m) => m.id);
+    const start = ids.findIndex((id) => id.endsWith(LIGHT_START));
+    return ids.slice(weight === "light" ? Math.max(0, start) : 0).filter((id) => available.includes(id));
+  });
 }
 
 export async function runOnLadder<T>(

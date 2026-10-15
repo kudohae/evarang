@@ -2,7 +2,9 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
+import { AiKeyFields, KeyNotice } from "@/components/account/AiKeyFields";
 import { AuthShell, Field, FormError, send, useSubmit } from "@/components/account/parts";
+import { aiProvider as providerById } from "@/lib/ai-providers";
 import { useConfig, useReloadConfig } from "@/components/AccessGate";
 import { Button, Spinner } from "@/components/ui";
 import { accountDocs } from "@/lib/docs/account";
@@ -39,7 +41,11 @@ export function AccountPage() {
   const [next, setNext] = useState("");
   const [confirm, setConfirm] = useState("");
   const [leavePassword, setLeavePassword] = useState("");
-  const [saved, setSaved] = useState<"" | "nickname" | "email" | "password">("");
+  const [saved, setSaved] = useState<"" | "nickname" | "email" | "password" | "aiKey">("");
+  const [aiProvider, setAiProvider] = useState("gemini");
+  const [aiKey, setAiKey] = useState("");
+  const [changingKey, setChangingKey] = useState(false);
+  const keyForm = useSubmit();
 
   const profile = useSubmit();
   const mail = useSubmit();
@@ -172,6 +178,73 @@ export function AccountPage() {
             </div>
           </form>
         </Section>
+
+        {config.aiKeys && (
+          <Section title="AI API 키">
+            {user.aiKey && !changingKey ? (
+              <>
+                <p className="text-[15px] text-ink">
+                  {providerById(user.aiKey.provider)?.label ?? user.aiKey.provider} · <span className="tabular">••••{user.aiKey.hint}</span>
+                </p>
+                <p className="text-[13px] leading-relaxed text-ink-3">평가와 피드백을 이 키로 받습니다. 키에 문제가 생기면 사이트의 무료 AI로 넘어가고, 그때는 하루 한도가 적용됩니다.</p>
+                <div className="flex flex-wrap items-center gap-3">
+                  <Button
+                    variant="secondary"
+                    onClick={() => {
+                      setAiProvider(user.aiKey!.provider);
+                      setChangingKey(true);
+                    }}
+                  >
+                    키 바꾸기
+                  </Button>
+                  <Button
+                    variant="quiet"
+                    disabled={keyForm.busy}
+                    onClick={() => {
+                      if (!window.confirm("API 키를 지울까요? 이후 평가는 사이트의 무료 AI를 하루 한도 안에서 씁니다.")) return;
+                      void keyForm.run(async () => {
+                        await send("/api/account/ai-key", "DELETE");
+                        await reload();
+                      });
+                    }}
+                  >
+                    {keyForm.busy ? <Spinner /> : "키 지우기"}
+                  </Button>
+                  <Saved show={saved === "aiKey"} />
+                </div>
+              </>
+            ) : (
+              <form
+                className="flex flex-col gap-4"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  void keyForm.run(async () => {
+                    await send("/api/account/ai-key", "PUT", { provider: aiProvider, key: aiKey });
+                    setAiKey("");
+                    setChangingKey(false);
+                    await reload();
+                    flash("aiKey");
+                  });
+                }}
+              >
+                <AiKeyFields provider={aiProvider} onProvider={setAiProvider} value={aiKey} onValue={setAiKey} required />
+                <KeyNotice />
+                <div className="flex items-center gap-4">
+                  <Button type="submit" variant="secondary" disabled={keyForm.busy || aiKey.trim().length < 10}>
+                    {keyForm.busy ? <Spinner /> : "키 확인하고 저장"}
+                  </Button>
+                  {changingKey && (
+                    <Button type="button" variant="quiet" onClick={() => (setChangingKey(false), setAiKey(""))}>
+                      취소
+                    </Button>
+                  )}
+                  <Saved show={saved === "aiKey"} />
+                </div>
+              </form>
+            )}
+            <FormError>{keyForm.error}</FormError>
+          </Section>
+        )}
 
         <Section title="시험 기록 저장">
           {keep ? (

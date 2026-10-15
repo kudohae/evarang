@@ -78,7 +78,7 @@ npm run test:e2e    # Playwright: 모의고사 흐름, 다시 듣기 5초, 보�
 ```
 
 - e2e는 `next dev`를 3100번 포트로 띄우고 받아쓰기·평가 API를 가짜 응답으로 바꿉니다. 키나 DB가 필요 없습니다.
-- 개발 서버가 보는 폴더 안에 로그 파일을 쓰면서 e2e를 돌리면 페이지가 계속 다시 불러와질 수 있습니다. 로그는 저장소 밖에 쓰세요.
+- 개발 서버가 보는 폴더 안에 로그 파일을 쓰면서 e2e를 돌리면 페이지가 계속 다시 불러와질 수 있습니다. 로그는 저장소 밖에 쓰세요. e2e는 브라우저 로그 전달도 끕니다(`NEXT_BROWSER_LOGS=off`): 전달된 로그가 `.next/dev/logs`에 쓰이면서 같은 반복 새로고침을 일으키는 것으로 보입니다.
 
 ## 사용량 한도
 
@@ -115,6 +115,13 @@ npm run test:e2e    # Playwright: 모의고사 흐름, 다시 듣기 5초, 보�
   node scripts/neon-http-proxy.mjs 4444 postgres://postgres@127.0.0.1:5432/postgres
   DATABASE_URL=postgres://postgres:x@localhost/postgres NEON_FETCH_ENDPOINT=http://localhost:4444/sql npm run dev
   ```
+
+## 회원의 API 키
+
+- 가입할 때나 내 정보에서 AI 종류와 API 키를 넣을 수 있습니다(선택). 지금은 Google Gemini만 고를 수 있고, OpenAI·Anthropic·Groq는 "준비 중"으로 보입니다(`src/lib/ai-providers.ts`).
+- 키를 넣은 회원은 평가와 피드백을 자기 키로 받고(`own:gemini-…` 모델, 보고서에는 "· 내 키"), 사이트의 하루 무료 한도를 받지 않습니다. 자기 키가 하루 한도에 걸리거나 거부되면 사이트의 무료 모델로 내려가고, 그때부터는 한도가 적용됩니다. 받아쓰기는 계속 사이트가 맡습니다.
+- 키는 저장 전에 Gemini에 확인하고, `user_ai_keys` 표에 AES-256-GCM으로 암호화해 둡니다(`AI_KEY_SECRET`). 브라우저에는 끝 4자리만 내려가고, 탈퇴하면 함께 지워집니다.
+- `AI_KEY_SECRET`이 없으면 이 기능은 꺼집니다. 값을 바꾸면 저장된 키를 읽을 수 없어 그 회원들은 키가 없는 것처럼 동작합니다.
 
 ## 동의와 데이터 수집
 

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { BusyNow, OutForToday, QuotaReached, runOnLadder } from "@/lib/feedback/ladder";
+import { onOwnKeyOut } from "@/lib/client/notices";
 import { ApiError } from "@/lib/http";
 import { MODELS, OWN_MODELS } from "@/lib/models";
 
@@ -78,5 +79,27 @@ describe("runOnLadder", () => {
       throw new OutForToday(err("daily"));
     }).catch(() => {});
     expect(calls).toEqual(["own:gemini-3.5-flash-lite", "gemini-3.5-flash-lite", "groq-gpt-oss"]);
+  });
+
+  it("tells the page once when the member's own key is out", async () => {
+    const heard: string[] = [];
+    const stop = onOwnKeyOut((m) => heard.push(m));
+    await runOnLadder([...ALL, ...OWN_MODELS.map((m) => m.id)], "full", async (id) => {
+      if (id.startsWith("own:")) throw new OutForToday(new ApiError(429, { error: "내 API 키가 거부되었습니다.", kind: "daily" }));
+      return id;
+    });
+    stop();
+    expect(heard).toEqual(["내 API 키가 거부되었습니다."]);
+  });
+
+  it("says nothing when only the site's models are out", async () => {
+    const heard: string[] = [];
+    const stop = onOwnKeyOut((m) => heard.push(m));
+    await runOnLadder(ALL, "full", async (id) => {
+      if (id === "gemini-3.8-flash") throw new OutForToday(err("daily"));
+      return id;
+    });
+    stop();
+    expect(heard).toEqual([]);
   });
 });

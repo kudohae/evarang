@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
+import { KeyOutDialog } from "@/components/KeyOutDialog";
 import { Button, Spinner, Wordmark } from "@/components/ui";
 
 export type Config = {
@@ -101,7 +102,10 @@ export function AccessGate({ children }: { children: ReactNode }) {
 
   return (
     <ReloadContext.Provider value={load}>
-      <ConfigContext.Provider value={config}>{children}</ConfigContext.Provider>
+      <ConfigContext.Provider value={config}>
+        {children}
+        <KeyOutDialog config={config} />
+      </ConfigContext.Provider>
     </ReloadContext.Provider>
   );
 }

@@ -142,6 +142,32 @@ body {
   animation: rise 420ms var(--ease-out-soft) both;
 }
 
+@keyframes pop {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.pop {
+  animation: pop 220ms var(--ease-out-soft) both;
+}
+
+dialog.sheet::backdrop {
+  background: color-mix(in srgb, #020617 45%, transparent);
+  animation: fade 200ms ease-out both;
+}
+
+@keyframes fade {
+  from {
+    opacity: 0;
+  }
+}
+
 @keyframes breathe {
   0%,
   100% {
@@ -155,7 +181,8 @@ body {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .rise {
+  .rise,
+  .pop {
     animation: none;
   }
   *,

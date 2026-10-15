@@ -1,3 +1,4 @@
+import { emitOwnKeyOut } from "@/lib/client/notices";
 import { ApiError, request } from "@/lib/http";
 import { MODELS, OWN_MODELS, type Usage } from "@/lib/models";
 
@@ -67,12 +68,18 @@ export async function runOnLadder<T>(
   run: (modelId: string, mayHandOff: boolean) => Promise<T>,
 ): Promise<T> {
   const busy: string[] = [];
+  let told = false;
   for (const id of ladder(available, weight)) {
     try {
       return await run(id, true);
     } catch (e) {
       if (e instanceof BusyNow) busy.push(id);
       else if (!(e instanceof OutForToday)) throw e;
+      // The member's own key is out: the work goes on with the site's free models; tell the page once.
+      else if (id.startsWith("own:") && !told) {
+        told = true;
+        emitOwnKeyOut(e.message);
+      }
     }
   }
   for (const id of busy) {

@@ -102,6 +102,23 @@ const ICONS = {
     </>
   ),
   stop: <rect x="6.5" y="6.5" width="11" height="11" rx="2" fill="currentColor" stroke="none" />,
+  check: <path d="M5 12.5 10 17l9-10" />,
+  x: <path d="M6 6l12 12M18 6 6 18" />,
+  eye: (
+    <>
+      <path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12Z" />
+      <circle cx="12" cy="12" r="3" />
+    </>
+  ),
+  eyeOff: (
+    <>
+      <path d="M4 4l16 16" />
+      <path d="M9.9 5.8A9.9 9.9 0 0 1 12 5.5C18 5.5 21.5 12 21.5 12a17 17 0 0 1-3 3.8M6.4 7.2C3.9 9 2.5 12 2.5 12S6 18.5 12 18.5c1.5 0 2.9-.4 4.1-1" />
+    </>
+  ),
+  trash: <path d="M4.5 7h15M9.5 7V4.5h5V7M6.5 7l1 12.5h9l1-12.5" />,
+  chevron: <path d="m9 6 6 6-6 6" />,
+  sparkle: <path d="M12 3.5 13.8 10 20.5 12 13.8 14 12 20.5 10.2 14 3.5 12 10.2 10Z" />,
 } as const;
 
 export function Icon({ name, className = "size-5" }: { name: keyof typeof ICONS; className?: string }) {
@@ -118,5 +135,53 @@ export function Spinner({ className = "size-4" }: { className?: string }) {
       <circle cx="12" cy="12" r="9" stroke="currentColor" strokeOpacity="0.2" strokeWidth="2.5" />
       <path d="M21 12a9 9 0 0 0-9-9" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
     </svg>
+  );
+}
+
+/** "Back" / "choose again": a real button, not a bare text link. Renders a link when given `href`. */
+export function BackButton({ href, onClick, children }: { href?: string; onClick?: () => void; children: ReactNode }) {
+  const cls =
+    "inline-flex h-9 select-none items-center gap-1.5 rounded-full border border-line-strong bg-surface pl-3 pr-4 text-[14px] font-medium text-ink-2 shadow-panel transition-[color,border-color,transform] duration-150 hover:border-ink hover:text-ink active:scale-[0.97]";
+  const inner = (
+    <>
+      <Icon name="back" className="size-4" />
+      {children}
+    </>
+  );
+  return href ? (
+    <Link href={href} className={cls}>
+      {inner}
+    </Link>
+  ) : (
+    <button type="button" onClick={onClick} className={cls}>
+      {inner}
+    </button>
+  );
+}
+
+/** A selectable pill. `count` shows on the right; pressed state is visible at once. */
+export function Chip({ on, onClick, children, count, disabled }: { on: boolean; onClick: () => void; children: ReactNode; count?: number; disabled?: boolean }) {
+  return (
+    <button
+      type="button"
+      aria-pressed={on}
+      disabled={disabled}
+      onClick={onClick}
+      className={`inline-flex h-10 select-none items-center gap-2 rounded-full border px-4 text-[14px] font-medium transition-[background-color,border-color,color,transform] duration-150 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-40 ${
+        on ? "border-ink bg-ink text-paper" : "border-line-strong bg-surface text-ink hover:border-ink"
+      }`}
+    >
+      {children}
+      {count !== undefined && <span className={`tabular text-[12px] ${on ? "text-paper/70" : "text-ink-3"}`}>{count}</span>}
+    </button>
+  );
+}
+
+/** A thin progress bar that grows smoothly. `value` is 0–1. */
+export function Progress({ value, label }: { value: number; label?: string }) {
+  return (
+    <div className="h-1.5 w-full overflow-hidden rounded-full bg-line" role="progressbar" aria-label={label} aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(value * 100)}>
+      <div className="h-full rounded-full bg-primary transition-[width] duration-500 ease-out" style={{ width: `${Math.max(0, Math.min(1, value)) * 100}%` }} />
+    </div>
   );
 }

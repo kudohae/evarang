@@ -28,7 +28,7 @@ export const FEATURES: Feature[] = [
     id: "practice",
     label: "맞춤형 연습",
     href: "/practice",
-    status: "soon",
+    status: "open",
     description: "약한 곳만 골라 한 문항씩 연습합니다.",
     children: [
       { id: "by-type", label: "문항별", description: "묘사, 루틴, 과거 경험, 롤플레이, 비교, 사회 이슈" },

@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Icon } from "@/components/ui";
 import { AnnotatedTranscript } from "@/components/report/Transcript";
+import type { DocKind } from "@/lib/docs/kinds";
 import { loadRecording } from "@/lib/docs/sync";
 import { resolveVoice, speak, useVoices, type Speech } from "@/lib/client/audio";
 import { TYPE_LABEL } from "@/lib/exam/compose";
@@ -10,7 +11,7 @@ import type { QuestionFeedback } from "@/lib/feedback/schema";
 import { answerMetrics, formatClock } from "@/lib/metrics";
 import type { AnswerRecord, ExamQuestion } from "@/lib/types";
 
-function AudioPlayer({ audioKey, fallbackSeconds }: { audioKey: string; fallbackSeconds: number }) {
+function AudioPlayer({ audioKey, fallbackSeconds, kind = "exam" }: { audioKey: string; fallbackSeconds: number; kind?: DocKind }) {
   const [url, setUrl] = useState("");
   const [playing, setPlaying] = useState(false);
   const [time, setTime] = useState(0);
@@ -23,7 +24,7 @@ function AudioPlayer({ audioKey, fallbackSeconds }: { audioKey: string; fallback
     // Admin view passes "remote:<blob path>"; everyone else plays their own copy, from this browser or their account.
     const load = audioKey.startsWith("remote:")
       ? fetch(`/api/admin/audio?path=${encodeURIComponent(audioKey.slice(7))}`).then((r) => (r.ok ? r.blob() : undefined))
-      : loadRecording(audioKey);
+      : loadRecording(audioKey, kind);
     void load.then((b) => {
       if (b && b.size) {
         u = URL.createObjectURL(b);
@@ -33,7 +34,7 @@ function AudioPlayer({ audioKey, fallbackSeconds }: { audioKey: string; fallback
     return () => {
       if (u) URL.revokeObjectURL(u);
     };
-  }, [audioKey]);
+  }, [audioKey, kind]);
 
   if (!url) return null;
   const pct = duration ? (time / duration) * 100 : 0;
@@ -106,7 +107,20 @@ function Label({ children }: { children: React.ReactNode }) {
   return <h4 className="text-[13px] font-semibold text-ink-2">{children}</h4>;
 }
 
-export function QuestionDetail({ question, answer, feedback }: { question: ExamQuestion; answer?: AnswerRecord; feedback?: QuestionFeedback }) {
+/** `kind`: the document the recording belongs to (mock tests by default; practice sessions and stories too). */
+export function QuestionDetail({
+  question,
+  answer,
+  feedback,
+  kind = "exam",
+  showNumber = true,
+}: {
+  question: ExamQuestion;
+  answer?: AnswerRecord;
+  feedback?: QuestionFeedback;
+  kind?: DocKind;
+  showNumber?: boolean;
+}) {
   const m = answer ? answerMetrics(answer) : null;
   const corrections = feedback?.corrections ?? [];
   const upgrades = feedback?.upgrades ?? [];
@@ -114,7 +128,8 @@ export function QuestionDetail({ question, answer, feedback }: { question: ExamQ
   return (
     <article className="rise">
       <p className="text-[13px] text-ink-3">
-        {question.number}번 · {TYPE_LABEL[question.type]} · {question.topicLabel}
+        {showNumber && `${question.number}번 · `}
+        {TYPE_LABEL[question.type]} · {question.topicLabel}
         {!question.scored && " · 채점 제외"}
       </p>
       <h3 className="mt-2 text-[18px] font-medium leading-[1.6] tracking-[-0.005em]" lang="en">
@@ -123,7 +138,7 @@ export function QuestionDetail({ question, answer, feedback }: { question: ExamQ
 
       {answer && (
         <div className="mt-6">
-          <AudioPlayer audioKey={answer.audioKey} fallbackSeconds={answer.durationMs / 1000} />
+          <AudioPlayer audioKey={answer.audioKey} fallbackSeconds={answer.durationMs / 1000} kind={kind} />
         </div>
       )}
 

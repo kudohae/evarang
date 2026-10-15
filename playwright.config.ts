@@ -29,10 +29,13 @@ export default defineConfig({
   ],
   webServer: {
     // Accounts, storage and access code off: the flow under test is the anonymous mock exam.
-    command: `npx next dev -p ${PORT}`,
+    // A production build, not `next dev`: dev's hot reload sometimes falls into a reload loop
+    // ("HMR hash mismatch") right after files change, which made whole runs time out.
+    // Route types left by an earlier `next dev` can name deleted pages and fail the build's type check.
+    command: `node -e "require('fs').rmSync('.next/dev/types',{recursive:true,force:true})" && npx next build && npx next start -p ${PORT}`,
     url: `http://localhost:${PORT}/api/config`,
     reuseExistingServer: false,
-    timeout: 120_000,
-    env: { NEXT_BROWSER_LOGS: "off", ACCESS_CODE: "", DATABASE_URL: "", POSTGRES_URL: "", BLOB_STORE_ID: "", BLOB_READ_WRITE_TOKEN: "", ASSEMBLYAI_API_KEY: "test", GEMINI_API_KEY: "test" },
+    timeout: 300_000,
+    env: { ACCESS_CODE: "", DATABASE_URL: "", POSTGRES_URL: "", BLOB_STORE_ID: "", BLOB_READ_WRITE_TOKEN: "", ASSEMBLYAI_API_KEY: "test", GEMINI_API_KEY: "test" },
   },
 });

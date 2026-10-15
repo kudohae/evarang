@@ -7,6 +7,8 @@ export type Session = {
   id: string;
   kind: SessionKind;
   createdAt: number;
+  /** For lists: what was practised ("과거 경험 · 여행"). */
+  title?: string;
   /** Shape is owned by each feature. */
   settings: Record<string, unknown>;
   attempts: Attempt[];

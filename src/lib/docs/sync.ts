@@ -182,15 +182,15 @@ export async function loadDoc<T>(kind: DocKind, id: string, { account = true }: 
 }
 
 /**
- * A mock-test recording by its local key ("<examId>:<n>"): this browser first, then the account,
- * keeping a fetched copy here for next time.
+ * A recording by its local key ("<docId>:<n>") in a document of `kind`: this browser first, then the
+ * account, keeping a fetched copy here for next time.
  */
-export async function loadRecording(audioKey: string): Promise<Blob | undefined> {
+export async function loadRecording(audioKey: string, kind: DocKind = "exam"): Promise<Blob | undefined> {
   const local = await getAudio(audioKey).catch(() => undefined);
   if (local?.size) return local;
   const cut = audioKey.lastIndexOf(":");
   if (cut <= 0) return undefined;
-  const blob = await accountDocs.getAudio("exam", audioKey.slice(0, cut), audioKey.slice(cut + 1));
+  const blob = await accountDocs.getAudio(kind, audioKey.slice(0, cut), audioKey.slice(cut + 1));
   if (blob) await putAudio(audioKey, blob).catch(() => {});
   return blob;
 }

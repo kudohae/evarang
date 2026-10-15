@@ -21,7 +21,7 @@ describe("cardsFromAttempts", () => {
       attempt("e1:3", { corrections: [{ original: "a apple", corrected: "an apple", kind: "grammar", reason: "관사" }] }),
       { ...attempt("e1:4", {}), feedback: undefined },
     ]);
-    expect(cards.map((c) => c.legacyId)).toEqual(["e1:2:c0", "e1:2:u0", "e1:3:c0"]);
+    expect(cards.map((c) => c.oldIds[0])).toEqual(["e1:2:c0", "e1:2:u0", "e1:3:c0"]);
     expect(new Set(cards.map((c) => c.id)).size).toBe(3);
     expect(cards[0]).toMatchObject({ before: "I go", after: "I went", reason: "과거", kind: "correction", skill: "tense.past", attemptId: "e1:2" });
     expect(cards[1]).toMatchObject({ before: "very good", after: "amazing", kind: "upgrade" });

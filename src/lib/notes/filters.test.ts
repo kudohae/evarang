@@ -11,19 +11,27 @@ const attempt = (id: string, source: Attempt["source"], fb: Partial<AnswerFeedba
 const corr = (o: string, c: string, skill?: string) => ({ original: o, corrected: c, kind: "grammar" as const, reason: "r", ...(skill ? { skill: skill as never } : {}) });
 
 describe("card ids", () => {
-  it("come from the content, so re-grading with the same fixes keeps them", () => {
+  it("come from the fix itself, the same in every answer and on every device", () => {
     const a = cardsFromAttempts([attempt("e:2", "exam", { corrections: [corr("I go", "I went"), corr("a apple", "an apple")] })]);
-    const b = cardsFromAttempts([attempt("e:2", "exam", { corrections: [corr("a apple", "an apple"), corr("I go", "I went")] })]);
+    const b = cardsFromAttempts([attempt("p:9", "drill", { corrections: [corr("a apple.", "An apple"), corr("I  go", "I went")] })]);
     expect(new Set(a.map((c) => c.id))).toEqual(new Set(b.map((c) => c.id)));
-    expect(a[0].id).toMatch(/^e:2:c:[a-z0-9]+$/);
-    expect(a[0].legacyId).toBe("e:2:c0");
+    expect(a[0].id).toMatch(/^c:[a-z0-9]+$/);
   });
 
-  it("old index-based review states move to the new ids", () => {
-    const cards = cardsFromAttempts([attempt("e:2", "exam", { corrections: [corr("I go", "I went")] })]);
-    const moved = migrateState({ "e:2:c0": { box: 3, due: 5, reviews: 2 } }, cards);
-    expect(moved[cards[0].id]).toEqual({ box: 3, due: 5, reviews: 2 });
-    expect(moved["e:2:c0"]).toBeUndefined();
+  it("old review states (index ids, attempt-based ids) move to the fix's id, the most-reviewed one winning", () => {
+    const cards = cardsFromAttempts([
+      { ...attempt("e:2", "exam", { corrections: [corr("I go", "I went")] }), createdAt: 1 },
+      { ...attempt("e:5", "exam", { corrections: [corr("I go", "I went")] }), createdAt: 2 },
+    ]);
+    const moved = migrateState(
+      {
+        "e:2:c0": { box: 2, due: 5, reviews: 1 },
+        [cards[1].oldIds[1]]: { box: 4, due: 9, reviews: 5, hidden: true },
+      },
+      cards,
+    );
+    expect(moved[cards[0].id]).toEqual({ box: 4, due: 9, reviews: 5, hidden: true });
+    expect(Object.keys(moved)).toEqual([cards[0].id]);
   });
 });
 
@@ -73,7 +81,7 @@ describe("wordDiff", () => {
 });
 
 describe("mergeDuplicates", () => {
-  it("the same fix from several answers is one card, counted, kept under the oldest id", () => {
+  it("the same fix from several answers is one card, counted, from every source it came from", () => {
     const cards = cardsFromAttempts([
       { ...attempt("e:1", "exam", { corrections: [corr("Very good.", "Absolutely amazing.")] }), createdAt: 1 },
       { ...attempt("e:2", "exam", { corrections: [corr("very good", "absolutely amazing"), corr("I go", "I went")] }), createdAt: 2 },
@@ -83,7 +91,17 @@ describe("mergeDuplicates", () => {
     expect(merged).toHaveLength(2);
     const amazing = merged.find((c) => /amazing/i.test(c.after))!;
     expect(amazing.times).toBe(3);
-    expect(amazing.id).toBe(cards[0].id);
+    expect(amazing.sources.sort()).toEqual(["exam", "practice"]);
     expect(merged.find((c) => c.after === "I went")!.times).toBe(1);
+  });
+
+  it("a repeat first seen in a mock test still shows under 연습", () => {
+    const merged = mergeDuplicates(
+      cardsFromAttempts([
+        { ...attempt("e:1", "exam", { corrections: [corr("a b", "c d")] }), createdAt: 1 },
+        { ...attempt("p:1", "drill", { corrections: [corr("a b", "c d")] }), createdAt: 2 },
+      ]),
+    );
+    expect(filterCards(merged, {}, { type: "all", status: "all", source: "practice" }, 0)).toHaveLength(1);
   });
 });

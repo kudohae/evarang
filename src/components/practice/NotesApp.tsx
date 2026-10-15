@@ -114,6 +114,9 @@ function ReviewCard({ card, canSpeak, onGrade }: { card: NoteCard; canSpeak: boo
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement || e.metaKey || e.ctrlKey || e.altKey) return;
+      // Enter and Space on a focused control press that control; the shortcut must not press another one.
+      const onControl = e.target instanceof Element && e.target.closest("button, a, select, [contenteditable='true']");
+      if (onControl && (e.key === "Enter" || e.key === " ")) return;
       if (stage === "ask" && e.key === " ") {
         e.preventDefault();
         setStage("reveal");
@@ -338,7 +341,7 @@ function CardRow({ card, box, due, onPractice, onHide, onShow }: { card: NoteCar
           <p className="text-[15px] leading-relaxed text-ink-2">{card.reason}</p>
           {(card.times ?? 1) > 1 && <p className="mt-2 text-[13px] font-medium text-pen-ink">같은 실수를 답변 {card.times}개에서 했습니다.</p>}
           <p className="mt-3 text-[13px] text-ink-3">
-            {card.source === "exam" ? "모의고사" : "연습"} · {new Date(card.createdAt).toLocaleDateString("ko-KR", { month: "long", day: "numeric" })} · {box ? `복습 ${box}단계${box >= LEARNED_BOX ? " · 익힘" : ""}` : "아직 복습 전"}
+            {card.sources.map((x) => (x === "exam" ? "모의고사" : "연습")).join(" · ")} · {new Date(card.createdAt).toLocaleDateString("ko-KR", { month: "long", day: "numeric" })} · {box ? `복습 ${box}단계${box >= LEARNED_BOX ? " · 익힘" : ""}` : "아직 복습 전"}
           </p>
           <p className="mt-1 line-clamp-2 text-[13px] text-ink-3" lang="en">
             질문: {card.question}
@@ -427,9 +430,9 @@ export function NotesApp() {
   useEffect(() => {
     if (migrated.current || state === null || attempts === null) return;
     migrated.current = true;
-    const moved = migrateState(state, raw);
+    const moved = migrateState(state, cards);
     if (JSON.stringify(moved) !== JSON.stringify(state)) update(moved);
-  }, [state, attempts, raw, update]);
+  }, [state, attempts, cards, update]);
 
   if (attempts === null || state === null) {
     return (

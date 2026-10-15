@@ -35,7 +35,7 @@ export function filterCards(cards: NoteCard[], state: ReviewState, f: NoteFilter
       } else if (s?.hidden) return false;
       if (f.status === "due" && !isDue(c, state, now)) return false;
       if (f.status === "learned" && (s?.box ?? 0) < LEARNED_BOX) return false;
-      if (f.source !== "all" && c.source !== f.source) return false;
+      if (f.source !== "all" && !c.sources.includes(f.source)) return false;
       return typeMatches(c, f.type);
     })
     .sort((a, b) => Number(isDue(b, state, now)) - Number(isDue(a, state, now)) || (state[a.id]?.due ?? 0) - (state[b.id]?.due ?? 0) || b.createdAt - a.createdAt);

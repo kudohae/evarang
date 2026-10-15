@@ -104,6 +104,24 @@ test("saying the correction aloud is checked, with the missed word shown", async
   await expect(page.getByText("아쉽습니다")).toBeVisible();
   await expect(page.locator("span.text-pen-ink", { hasText: "an" })).toBeVisible();
 
+  // A focused button gets Enter, not the page shortcut: overriding a mis-hearing counts as right.
+  await page.getByRole("button", { name: "맞게 말했어요" }).focus();
+  await page.keyboard.press("Enter");
+  await expect(page.getByText("모두 맞혔습니다")).toBeVisible();
+});
+
+test("a second try after a miss can be right", async ({ page }) => {
+  let said = "I live in a apartment.";
+  await page.route("**/api/transcribe", (route) => route.fulfill({ json: { text: said, words: [], audioSeconds: 2 } }));
+  await seedExam(page);
+  await page.getByRole("button", { name: /^문법/ }).click();
+  await page.getByRole("button", { name: "1장 복습 시작" }).click();
+  await connectMic(page);
+  await page.getByRole("button", { name: "말하기" }).click();
+  await page.waitForTimeout(700);
+  await page.getByRole("button", { name: "다 말했어요" }).click();
+  await expect(page.getByText("아쉽습니다")).toBeVisible();
+
   said = "I live in an apartment.";
   await page.getByRole("button", { name: "다시 말하기" }).click();
   await page.getByRole("button", { name: "말하기" }).click();

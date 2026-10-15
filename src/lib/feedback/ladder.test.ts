@@ -1,6 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import { BusyNow, OutForToday, QuotaReached, runOnLadder } from "@/lib/feedback/ladder";
-import { onOwnKeyOut } from "@/lib/client/notices";
+import { clearOwnKeyOut, onOwnKeyOut } from "@/lib/client/notices";
 import { ApiError } from "@/lib/http";
 import { MODELS, OWN_MODELS } from "@/lib/models";
 
@@ -8,6 +8,8 @@ const ALL = MODELS.map((m) => m.id);
 const err = (kind: string) => new ApiError(429, { error: kind, kind });
 
 describe("runOnLadder", () => {
+  beforeEach(() => clearOwnKeyOut());
+
   it("ladder order and handoff", async () => {
     const calls: string[] = [];
     const result = await runOnLadder(ALL, "full", async (id) => {
@@ -101,5 +103,35 @@ describe("runOnLadder", () => {
     });
     stop();
     expect(heard).toEqual([]);
+  });
+
+  it("after the member's key is out, later runs skip it and say nothing again", async () => {
+    const heard: string[] = [];
+    const stop = onOwnKeyOut((m) => heard.push(m));
+    const all = [...ALL, ...OWN_MODELS.map((m) => m.id)];
+    await runOnLadder(all, "full", async (id) => {
+      if (id.startsWith("own:")) throw new OutForToday(err("daily"));
+      return id;
+    });
+    const calls: string[] = [];
+    await runOnLadder(all, "full", async (id) => {
+      calls.push(id);
+      if (id.startsWith("own:")) throw new OutForToday(err("daily"));
+      return id;
+    });
+    stop();
+    expect(calls).toEqual(["gemini-3.8-flash"]);
+    expect(heard).toHaveLength(1);
+  });
+
+  it("a saved key is tried again", async () => {
+    const all = [...ALL, ...OWN_MODELS.map((m) => m.id)];
+    await runOnLadder(all, "full", async (id) => {
+      if (id.startsWith("own:")) throw new OutForToday(err("daily"));
+      return id;
+    });
+    clearOwnKeyOut();
+    const first = await runOnLadder(all, "full", async (id) => id);
+    expect(first).toBe(OWN_MODELS[0].id);
   });
 });

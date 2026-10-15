@@ -7,6 +7,7 @@ import { AuthShell, Field, FormError, send, useSubmit } from "@/components/accou
 import { aiProvider as providerById } from "@/lib/ai-providers";
 import { useConfig, useReloadConfig } from "@/components/AccessGate";
 import { Button, Spinner } from "@/components/ui";
+import { clearOwnKeyOut } from "@/lib/client/notices";
 import { accountDocs } from "@/lib/docs/account";
 import { localDocs } from "@/lib/docs/local";
 import { syncEnabled } from "@/lib/docs/policy";
@@ -220,6 +221,7 @@ export function AccountPage() {
                   e.preventDefault();
                   void keyForm.run(async () => {
                     await send("/api/account/ai-key", "PUT", { provider: aiProvider, key: aiKey });
+                    clearOwnKeyOut();
                     setAiKey("");
                     setChangingKey(false);
                     await reload();

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Dialog } from "@/components/Dialog";
 import { Button } from "@/components/ui";
 import { onOwnKeyOut } from "@/lib/client/notices";
@@ -17,7 +17,16 @@ const SEEN = "evarang:key-out-shown";
 export function KeyOutDialog({ config }: { config: Config }) {
   const [message, setMessage] = useState<string | null>(null);
 
-  useEffect(() => onOwnKeyOut((m) => setMessage((cur) => cur ?? m)), []);
+  // The ladder says it once per page view (notices.ts); a request that ends before the load check runs
+  // can also find the key out, so the load check stays quiet once anything was shown.
+  const shown = useRef(false);
+  const show = (m: string) => {
+    if (shown.current) return;
+    shown.current = true;
+    setMessage(m);
+  };
+
+  useEffect(() => onOwnKeyOut(show), []);
 
   useEffect(() => {
     if (!config.user?.aiKey) return;
@@ -27,7 +36,7 @@ export function KeyOutDialog({ config }: { config: Config }) {
       if (sessionStorage.getItem(SEEN)) return;
       sessionStorage.setItem(SEEN, "1");
     } catch {}
-    setMessage("내 API 키의 오늘 사용량을 모두 썼거나, 키가 거부되었습니다.");
+    show("내 API 키의 오늘 사용량을 모두 썼거나, 키가 거부되었습니다.");
   }, [config]);
 
   // The server says which: refused (key deleted or changed) or today's quota spent; the load check cannot tell.

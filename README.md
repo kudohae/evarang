@@ -48,6 +48,7 @@ src/
     api/auth, api/account 가입·로그인·로그아웃, 회원정보 수정·탈퇴 (lib/server/auth.ts)
     api/me/docs           계정에 둔 기록(종류별)과 녹음 (lib/server/docs.ts)
     api/me/usage          오늘 남은 무료 횟수 (lib/server/meter.ts)
+    api/stories/generate  스토리뱅크 이야기 만들기 (회원만)
     api/records           예측 개선용 기록의 저장·녹음 업로드·삭제
     api/admin/*           관리자 화면용 목록, 기록, 녹음
     api/cron/purge        보유 기간이 지난 기록과 90일 지난 사용 기록 삭제 (vercel.json)
@@ -55,8 +56,12 @@ src/
   components/AppShell     홈·보고서·회원·처리방침이 함께 쓰는 머리말
   components/exam/        시험 화면 (설문, 자가평가, 장비 점검, 문항, 재조정)
   components/report/      평가 보고서
+  components/practice/    첨삭노트·맞춤형 연습·구조화 연습·스토리뱅크 화면, 연습 실행기(PracticeRunner)
   lib/features.ts         기능 등록부 (홈 메뉴와 머리말이 읽음)
-  lib/domain/             약점 이름표 21개(skills), 시도·세션 모양, 모의고사 → 시도 어댑터
+  lib/domain/             약점 이름표 21개(skills), 시도·세션 모양, 모의고사 → 시도 어댑터, 약점 프로필
+  lib/practice/           연습 문항 고르기, 구조화 연습 단계
+  lib/notes/              첨삭노트 카드, 복습 간격, 말한 문장 비교
+  lib/stories/            스토리뱅크 응답 스키마, 프롬프트
   lib/feedback/           렌즈(무엇을 볼지), 프롬프트, 응답 스키마, 무료 모델 사다리
   lib/capture/            답변 받기: 정책(시험/연습), 마이크, 녹음 단계, 저장 후 받아쓰기
   lib/docs/               기록 저장: 종류 등록부, 브라우저 저장소, 계정 API, 동기화
@@ -69,12 +74,23 @@ src/
 
 녹음과 결과는 사용자의 브라우저(IndexedDB)에 저장됩니다. 서버에는 계정 저장이나 "예측 개선을 위한 저장"에 동의한 기록만 남습니다.
 
+## 연습 기능
+
+모의고사에서 드러난 약점을 이어서 연습합니다. 네 기능 모두 기반 공사의 부품(시도·세션, 렌즈 피드백, 답변 받기 엔진, 문서 저장·동기화, 사용량 장부)만으로 만들었습니다. 설계는 `docs/superpowers/specs/2026-10-15-practice-features-design.md`.
+
+- **첨삭노트 (`/notes`):** 모의고사와 연습에서 받은 교정·더 나은 표현을 카드로 모읍니다. 카드는 기록에서 다시 만들고, 복습 상태만 `note` 문서 하나(`reviewstate`)에 둡니다. 복습은 고친 문장을 소리 내어 말하면 받아쓰기와 단어 비교로 채점합니다(AI 평가 없음, `lib/notes/match.ts`). 마이크 없이 자기 채점도 됩니다. 맞히면 라이트너 상자가 오르고(0·1·3·7·14일), 틀리면 처음으로 돌아갑니다.
+- **맞춤형 연습 (`/practice`):** 문항별(유형 9개)·주제별(서베이·돌발 주제)로 한 문항씩 답하고, 렌즈 `type.<유형>`으로 첨삭을 받습니다. 약점 프로필(`lib/domain/profile.ts`)로 자주 약했던 이름표와 맞는 유형을 추천합니다. 연습 화면은 다시 듣기 무제한, 질문 보기, 다시 말하기가 됩니다(`PRACTICE_POLICY`).
+- **문장 구조화 연습 (`/structure`):** 바로 답하기 → 이유 → 예시·경험 → 생각·감정 → 처음부터 끝까지, 다섯 단계. 단계마다 설명과 영어 틀이 있고, 렌즈 `structure.*`(가벼운 피드백, Flash-Lite부터)로 그 단계 이름표의 판정을 크게 보여줍니다. 그 이름표가 강점으로 나오면 통과입니다.
+- **스토리뱅크 (`/stories`):** 회원이 주제(1~3개)와 한국어 메모, 목표 등급을 넣으면 1인칭 과거 영어 이야기, 답변 뼈대, 외울 표현, 다른 질문에 쓰는 요령을 만듭니다(`/api/stories/generate`, 하루 3번, 내 API 키는 무제한). 이야기는 고칠 수 있고, 그 이야기를 쓸 수 있는 주제의 과거 경험 질문으로 말하기 연습을 합니다.
+- 연습 기록은 `session`(맞춤형·구조화), `story` 문서로 남고 지난 기록은 `/sessions/{id}`에서 봅니다. 계정 저장에 동의한 회원은 모의고사처럼 계정에 따라 올라가고, 홈에 들어올 때 못 올린 것을 다시 보냅니다.
+- 사용량: 맞춤형 연습·스토리 연습은 `feedback.answer`(비회원 10 · 회원 30), 구조화 연습은 `feedback.light`(30 · 100), 첨삭노트 복습은 받아쓰기만 셉니다.
+
 ## 시험(테스트)
 
 ```bash
 npm run typecheck
 npm test            # Vitest: 이름표, 스키마, 렌즈, 사다리, 사용량, 저장소, 동기화 (fake-indexeddb)
-npm run test:e2e    # Playwright: 모의고사 흐름, 다시 듣기 5초, 보조 음성인식 안내, 공통 머리말
+npm run test:e2e    # Playwright: 모의고사 흐름, 다시 듣기 5초, 보조 음성인식 안내, 공통 머리말, 네 연습 기능
 ```
 
 - e2e는 빌드한 뒤 `next start`로 3100번 포트에 띄우고, 받아쓰기·평가 API를 가짜 응답으로 바꿉니다. 키나 DB가 필요 없습니다. `next dev`의 자동 새로고침이 파일을 바꾼 직후 가끔 "HMR hash mismatch"로 계속 새로고침해서 개발 서버는 쓰지 않습니다.

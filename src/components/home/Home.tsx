@@ -216,6 +216,11 @@ export function Home() {
           await loadLocal();
           setRemote((await accountDocs.list("exam").catch(() => [])).filter((d) => !d.deletedAt));
         }
+        // Practice, notes and stories saved elsewhere whose push did not finish (a closed tab) go up now, quietly.
+        for (const kind of ["session", "note", "story"] as const) {
+          const other = await syncKind(kind, { audio }).catch(() => null);
+          for (const id of other?.push ?? []) await pushDoc(kind, id, { audio });
+        }
       } catch {
         setRemote([]);
       } finally {

@@ -61,6 +61,16 @@ export function useDocList<T>(kind: DocKind) {
     [kind, keep, audio, reload],
   );
 
+  /** Like `save`, but sends the account copy before returning — for a save followed by leaving the page. */
+  const saveNow = useCallback(
+    async (id: string, data: T) => {
+      await localDocs.put(kind, id, data);
+      if (keep) await pushDoc(kind, id, { audio });
+      await reload();
+    },
+    [kind, keep, audio, reload],
+  );
+
   const ids = new Set((local ?? []).map((d) => d.id));
-  return { local, remote: remote.filter((r) => !ids.has(r.id)), save, reload, keep };
+  return { local, remote: remote.filter((r) => !ids.has(r.id)), save, saveNow, reload, keep };
 }

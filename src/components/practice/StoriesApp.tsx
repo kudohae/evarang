@@ -41,7 +41,7 @@ export function StoriesApp() {
       const available = config.models.filter((m) => m.available).map((m) => m.id);
       const { story, modelId } = await generateStory({ ref: id, topicIds: topics, memo, level }, available);
       const doc: StoryDoc = { ...story, id, createdAt: Date.now(), topicIds: topics, memo, level, modelId, practice: [] };
-      await docs.save(id, doc);
+      await docs.saveNow(id, doc);
       router.push(`/stories/${id}`);
     } catch (e) {
       setError((e as Error).message);

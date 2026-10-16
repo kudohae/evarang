@@ -1,5 +1,4 @@
 import { expect, test, type Page } from "@playwright/test";
-import { INVITE } from "../playwright.accounts.config";
 import { blockFonts } from "./fixtures";
 
 /* The site behind a login: what a visitor sees before and after signing in, and after signing out. */
@@ -13,9 +12,8 @@ test.beforeEach(async ({ page }) => {
 
 const loginScreen = (page: Page) => page.getByRole("heading", { name: "로그인", exact: true });
 
-async function signUp(page: Page, address: string, invite = INVITE) {
+async function signUp(page: Page, address: string) {
   await page.getByRole("link", { name: "가입하기" }).click();
-  await page.getByLabel("초대 코드").fill(invite);
   await page.getByLabel("이메일").fill(address);
   await page.getByLabel("닉네임").fill("테스트");
   await page.getByLabel("비밀번호", { exact: true }).fill(PASSWORD);
@@ -34,21 +32,21 @@ test("a visitor who has not signed in sees the login screen on every page", asyn
   await expect(page.getByLabel("접근 코드")).toHaveCount(0);
 });
 
-test("the API refuses a visitor who has not signed in, invite code or not", async ({ request }) => {
-  // The old entry screen's code no longer opens anything.
-  await request.post("/api/access", { data: { code: INVITE } });
+test("the API refuses a visitor who has not signed in", async ({ request }) => {
+  // The old entry code is gone, with its route.
+  expect((await request.post("/api/access", { data: { code: "anything" } })).status()).toBe(404);
   expect((await request.get("/api/me/docs?kind=exam")).status()).toBe(401);
   expect((await request.post("/api/feedback/answers", { data: {} })).status()).toBe(401);
   expect((await request.post("/api/transcribe", { data: {} })).status()).toBe(401);
 });
 
-test("sign-up needs the invite code, then the page asked for opens", async ({ page }) => {
+test("anyone can sign up, without an invite code, and the page asked for opens", async ({ page }) => {
   await page.goto("/practice");
   await expect(loginScreen(page)).toBeVisible();
-  await signUp(page, email(), "wrong-code");
-  await expect(page.getByText("초대 코드가 맞지 않습니다.")).toBeVisible();
-  await page.getByLabel("초대 코드").fill(INVITE);
-  await page.getByRole("button", { name: "가입하기" }).click();
+  await page.getByRole("link", { name: "가입하기" }).click();
+  await expect(page.getByLabel("초대 코드")).toHaveCount(0);
+  await page.goBack();
+  await signUp(page, email());
   await expect(page).toHaveURL(/\/practice$/);
   await expect(page.getByRole("heading", { name: "맞춤형 연습" })).toBeVisible();
 });

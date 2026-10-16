@@ -1,16 +1,16 @@
 import { defineConfig, devices } from "@playwright/test";
 
 /*
-  The signed-in site: accounts on, an invite code for sign-up. Needs a local Postgres
+  The signed-in site, with accounts on. Needs a local Postgres
   (postgres:x@127.0.0.1:5432) and the `pg` package (npm i --no-save pg); see scripts/neon-http-proxy.mjs.
     npm run test:e2e:accounts
 */
 const PORT = 3101;
-export const INVITE = "e2e-invite";
 
 export default defineConfig({
   testDir: "e2e",
   testMatch: /accounts\.spec\.ts/,
+  globalSetup: "./e2e/accounts.setup.ts",
   timeout: 120_000,
   expect: { timeout: 20_000 },
   fullyParallel: false,
@@ -30,7 +30,8 @@ export default defineConfig({
       reuseExistingServer: false,
       timeout: 300_000,
       env: {
-        ACCESS_CODE: INVITE,
+        // Left over from the invite code that was removed: it must not matter.
+        ACCESS_CODE: "leftover",
         DATABASE_URL: "postgres://postgres:x@localhost/postgres",
         NEON_FETCH_ENDPOINT: "http://localhost:4445/sql",
         BLOB_STORE_ID: "",

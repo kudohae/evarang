@@ -30,7 +30,7 @@ export default defineConfig({
     },
   ],
   webServer: {
-    // Accounts, storage and access code off: the flow under test is the anonymous mock exam.
+    // Accounts and storage off: the flow under test is the anonymous mock exam.
     // A production build, not `next dev`: dev's hot reload sometimes falls into a reload loop
     // ("HMR hash mismatch") right after files change, which made whole runs time out.
     // Route types left by an earlier `next dev` can name deleted pages and fail the build's type check.
@@ -38,6 +38,6 @@ export default defineConfig({
     url: `http://localhost:${PORT}/api/config`,
     reuseExistingServer: false,
     timeout: 300_000,
-    env: { ACCESS_CODE: "", DATABASE_URL: "", POSTGRES_URL: "", BLOB_STORE_ID: "", BLOB_READ_WRITE_TOKEN: "", ASSEMBLYAI_API_KEY: "test", GEMINI_API_KEY: "test" },
+    env: { DATABASE_URL: "", POSTGRES_URL: "", BLOB_STORE_ID: "", BLOB_READ_WRITE_TOKEN: "", ASSEMBLYAI_API_KEY: "test", GEMINI_API_KEY: "test" },
   },
 });

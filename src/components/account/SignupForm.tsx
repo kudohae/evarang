@@ -20,17 +20,16 @@ export function SignupForm() {
   const [age, setAge] = useState(false);
   const [aiProvider, setAiProvider] = useState("gemini");
   const [aiKey, setAiKey] = useState("");
-  const [invite, setInvite] = useState("");
   const { busy, error, setError, run } = useSubmit();
 
   const mismatch = confirm.length > 0 && confirm !== password;
-  const ready = (!config.inviteRequired || invite.trim()) && email && nickname.trim() && password.length >= 8 && confirm === password && agree && age;
+  const ready = email && nickname.trim() && password.length >= 8 && confirm === password && agree && age;
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
     if (password !== confirm) return setError("비밀번호 확인이 일치하지 않습니다.");
     void run(async () => {
-      await send("/api/auth/signup", "POST", { email, nickname, password, agree, age, ...(config.inviteRequired ? { invite } : {}), ...(aiKey.trim() ? { aiProvider, aiKey } : {}) });
+      await send("/api/auth/signup", "POST", { email, nickname, password, agree, age, ...(aiKey.trim() ? { aiProvider, aiKey } : {}) });
       await reload();
       router.replace(next);
     });
@@ -60,10 +59,7 @@ export function SignupForm() {
         이미 계정이 있다면 <TextLink href={next === "/" ? "/login" : `/login?next=${encodeURIComponent(next)}`}>로그인</TextLink>
       </p>
       <form onSubmit={submit} className="mt-8 flex flex-col gap-5">
-        {config.inviteRequired && (
-          <Field label="초대 코드" type="password" autoComplete="off" required autoFocus value={invite} onChange={(e) => setInvite(e.target.value)} hint="지금은 초대받은 사람만 가입할 수 있습니다." />
-        )}
-        <Field label="이메일" type="email" autoComplete="email" required autoFocus={!config.inviteRequired} value={email} onChange={(e) => setEmail(e.target.value)} hint="로그인할 때 씁니다." />
+        <Field label="이메일" type="email" autoComplete="email" required autoFocus value={email} onChange={(e) => setEmail(e.target.value)} hint="로그인할 때 씁니다." />
         <Field label="닉네임" autoComplete="nickname" required maxLength={20} value={nickname} onChange={(e) => setNickname(e.target.value)} hint="20자까지" />
         <Field label="비밀번호" type="password" autoComplete="new-password" required minLength={8} value={password} onChange={(e) => setPassword(e.target.value)} hint="8자 이상" />
         <Field

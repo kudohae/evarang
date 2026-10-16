@@ -1,4 +1,3 @@
-import { accessRequired, hasAccess } from "@/lib/server/access";
 import { modelAvailable } from "@/lib/server/llm";
 import { MODELS, OWN_MODELS } from "@/lib/models";
 import { aiKeysConfigured, keySummary, type KeySummary } from "@/lib/server/ai-keys";
@@ -14,18 +13,15 @@ export async function GET() {
   } catch {
     // The database being down should not take the whole site with it; the visitor just looks signed out.
   }
-  // With accounts, the site is for signed-in members (see guard); without, behind the access code if set.
-  const ok = auth ? Boolean(user) : await hasAccess();
+  // With accounts, the site is for signed-in members (see guard); without, open.
   try {
     aiKey = user ? await keySummary(user.id) : null;
   } catch {
     // Without the key record the member grades on the site's free models, as if they had no key.
   }
   return Response.json({
-    accessRequired: auth || accessRequired(),
-    hasAccess: ok,
-    /** Sign-up asks for the invite code (ACCESS_CODE). */
-    inviteRequired: auth && accessRequired(),
+    accessRequired: auth,
+    hasAccess: !auth || Boolean(user),
     research: storageConfigured(),
     auth,
     user: user && {

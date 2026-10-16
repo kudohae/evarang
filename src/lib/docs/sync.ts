@@ -12,6 +12,7 @@ import { ApiError } from "@/lib/http";
   - push: a document whose local version is newer than the one last sent, or that the account lost.
   - deletions travel both ways as marks; a later edit beats an earlier deletion.
   - pull is lazy: lists carry summaries; a document is fetched when opened, a recording when played.
+    Screens that read every record (첨삭노트, the level for practice feedback) pull them all first (pullKind).
 */
 
 type RemoteEntry = { id: string; updatedAt: number; deletedAt?: number };
@@ -40,6 +41,23 @@ export function planSync(
     }
   }
   return { push, dropLocal };
+}
+
+/**
+ * Account copies this browser should fetch: ones it does not have, and ones changed there since it last
+ * synced and not changed here since (a local edit or deletion goes up instead; see planSync).
+ */
+export function planPull(local: Doc[], remote: RemoteEntry[], sync: Record<string, SyncState | undefined>): string[] {
+  const localById = new Map(local.map((d) => [d.id, d]));
+  return remote
+    .filter((r) => {
+      if (r.deletedAt) return false;
+      const d = localById.get(r.id);
+      if (!d) return true;
+      const pushed = sync[r.id]?.pushedVersion;
+      return !d.deletedAt && pushed !== undefined && d.updatedAt <= pushed && r.updatedAt > pushed;
+    })
+    .map((r) => r.id);
 }
 
 function pendingAudio(d: Doc, s: SyncState | undefined): boolean {
@@ -173,12 +191,37 @@ export async function loadDoc<T>(kind: DocKind, id: string, { account = true }: 
   const local = await localDocs.get<T>(kind, id).catch(() => undefined);
   if (local && !local.deletedAt) return local;
   if (!account) return null;
+  return fetchCopy<T>(kind, id, local?.data);
+}
+
+/** The account's copy, kept here as in step with it; this browser's own fields stay (see KINDS). */
+async function fetchCopy<T>(kind: DocKind, id: string, mine: unknown): Promise<Doc<T> | null> {
   const remote = await accountDocs.get<T>(kind, id);
   if (!remote || remote.deletedAt || remote.data === null) return null;
   const { audio, ...doc } = remote;
-  await localDocs.put(kind, id, doc.data, { updatedAt: doc.updatedAt });
+  const data = keepLocalFields(kind, mine, doc.data) as T;
+  await localDocs.put(kind, id, data, { updatedAt: doc.updatedAt });
   await localDocs.setSync(kind, id, { pushedVersion: doc.updatedAt, syncedAt: Date.now(), uploaded: audio });
-  return { ...doc, kind, id };
+  return { ...doc, data, kind, id };
+}
+
+/** Fetches the account copies this browser lacks or holds out of date (planPull); returns the ids kept. */
+export async function pullKind(kind: DocKind): Promise<string[]> {
+  const [remote, local] = await Promise.all([accountDocs.list(kind), localDocs.list(kind, { withDeleted: true })]);
+  const sync: Record<string, SyncState | undefined> = {};
+  await Promise.all(local.map(async (d) => (sync[d.id] = await localDocs.getSync(kind, d.id))));
+  const queue = planPull(local, remote, sync);
+  const kept: string[] = [];
+  // A few at a time; one that fails is tried again on the next pull.
+  await Promise.all(
+    Array.from({ length: Math.min(4, queue.length) }, async () => {
+      for (let id = queue.shift(); id !== undefined; id = queue.shift()) {
+        const mine = local.find((d) => d.id === id)?.data;
+        if (await fetchCopy(kind, id, mine).catch(() => null)) kept.push(id);
+      }
+    }),
+  );
+  return kept;
 }
 
 /**

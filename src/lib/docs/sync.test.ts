@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { putAudio } from "@/lib/client/db";
 import type { Doc } from "@/lib/docs/kinds";
 import { localDocs } from "@/lib/docs/local";
-import { planSync, pushDoc, syncKind } from "@/lib/docs/sync";
+import { planPull, planSync, pullKind, pushDoc, syncKind } from "@/lib/docs/sync";
 import type { ExamResult } from "@/lib/exam/result";
 
 function exam(id: string, extra: Partial<ExamResult> = {}): ExamResult {
@@ -81,6 +81,63 @@ describe("planSync", () => {
 
   it("a doc the account lost is pushed again", () => {
     expect(planSync([doc("z", 5)], [], { z: { pushedVersion: 5, uploaded: [] } }).push).toEqual(["z"]);
+  });
+});
+
+describe("planPull", () => {
+  it("fetches what only the account has, and what changed there since this browser last synced", () => {
+    const ids = planPull(
+      [doc("same", 5), doc("stale", 5), doc("edited-here", 8), doc("deleted-here", 9, 9), doc("never-sent", 3)],
+      [
+        { id: "same", updatedAt: 5 },
+        { id: "stale", updatedAt: 7 },
+        { id: "edited-here", updatedAt: 7 },
+        { id: "deleted-here", updatedAt: 7 },
+        { id: "only-there", updatedAt: 4 },
+        { id: "gone-there", updatedAt: 6, deletedAt: 6 },
+      ],
+      { same: { pushedVersion: 5, uploaded: [] }, stale: { pushedVersion: 5, uploaded: [] }, "edited-here": { pushedVersion: 5, uploaded: [] } },
+    );
+    // edited-here: newer here, it goes up instead. deleted-here: the deletion goes up. never-sent: not there.
+    expect(ids.sort()).toEqual(["only-there", "stale"]);
+  });
+});
+
+describe("pullKind", () => {
+  it("keeps the account's copies here, keeping this browser's own fields", async () => {
+    await localDocs.put("exam", "old", exam("old", { research: { secret: "keep", uploaded: [] } }), { updatedAt: 1500 });
+    await localDocs.setSync("exam", "old", { pushedVersion: 1500, uploaded: [] });
+    const docs: Record<string, { updatedAt: number; data: ExamResult }> = {
+      old: { updatedAt: 3000, data: exam("old", { actualGrade: "IH" }) },
+      new: { updatedAt: 2000, data: exam("new") },
+    };
+    const calls = fakeFetch([
+      (c) => (c.url.startsWith("/api/me/docs?kind=exam") ? Response.json({ docs: Object.entries(docs).map(([id, d]) => ({ id, updatedAt: d.updatedAt, summary: {} })) }) : undefined),
+      (c) => {
+        const id = c.url.match(/^\/api\/me\/docs\/exam\/([^/?]+)$/)?.[1];
+        return id && docs[id] ? Response.json({ kind: "exam", id, ...docs[id], audio: ["1"] }) : undefined;
+      },
+    ]);
+
+    expect((await pullKind("exam")).sort()).toEqual(["new", "old"]);
+    const old = await localDocs.get<ExamResult>("exam", "old");
+    expect(old?.updatedAt).toBe(3000);
+    expect(old?.data?.actualGrade).toBe("IH");
+    expect(old?.data?.research?.secret).toBe("keep");
+    expect((await localDocs.get<ExamResult>("exam", "new"))?.updatedAt).toBe(2000);
+    // Already in step: nothing is fetched again, and nothing pulled is pushed back.
+    expect(await pullKind("exam")).toEqual([]);
+    expect((await syncKind("exam")).push).toEqual([]);
+    expect(calls.filter((c) => c.method !== "GET")).toEqual([]);
+  });
+
+  it("one copy that cannot be fetched does not stop the others", async () => {
+    fakeFetch([
+      (c) => (c.url.startsWith("/api/me/docs?kind=exam") ? Response.json({ docs: [{ id: "bad", updatedAt: 1, summary: {} }, { id: "good", updatedAt: 1, summary: {} }] }) : undefined),
+      (c) => (c.url.endsWith("/bad") ? Response.json({ error: "x" }, { status: 500 }) : undefined),
+      (c) => (c.url.endsWith("/good") ? Response.json({ kind: "exam", id: "good", updatedAt: 1, data: exam("good"), audio: [] }) : undefined),
+    ]);
+    expect(await pullKind("exam")).toEqual(["good"]);
   });
 });
 

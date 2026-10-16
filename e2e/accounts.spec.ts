@@ -72,3 +72,49 @@ test("signing out returns to the login screen, and signing in there opens the si
   await expect(page).toHaveURL(/\/notes$/);
   await expect(page.getByRole("heading", { name: "첨삭노트" })).toBeVisible();
 });
+
+test("a mock test kept in the account shows up in the notes on another device", async ({ page, browser }) => {
+  const address = email();
+  await page.goto("/");
+  await signUp(page, address);
+  await expect(page.getByRole("navigation", { name: "기능" })).toBeVisible();
+  // As if taken on another device: the record is only in the account.
+  const headers = { origin: new URL(page.url()).origin };
+  expect((await page.request.post("/api/me/records-consent", { data: { agree: true }, headers })).ok()).toBe(true);
+  const id = `e2e${Date.now().toString(36)}`;
+  const result = {
+    id,
+    createdAt: Date.now() - 60_000,
+    finishedAt: Date.now() - 30_000,
+    timedOut: false,
+    survey: {},
+    startLevel: 4,
+    adjustment: "same",
+    finalLevel: 4,
+    questions: [{ number: 2, topicId: "park", topicLabel: "공원", type: "describe", text: "Tell me about a park you like.", scored: true }],
+    answers: [],
+    evaluations: [
+      {
+        id: "ev1",
+        modelId: "gemini-3.5-flash",
+        createdAt: Date.now() - 20_000,
+        usage: {},
+        questions: [{ number: 2, corrections: [{ original: "I go to park yesterday.", corrected: "I went to the park yesterday.", reason: "어제 일은 과거형으로 말합니다." }], upgrades: [], skills: [] }],
+      },
+    ],
+  };
+  const put = await page.request.put(`/api/me/docs/exam/${id}`, { data: { updatedAt: Date.now(), data: result }, headers });
+  expect(put.ok()).toBe(true);
+
+  const other = await browser.newContext();
+  const there = await other.newPage();
+  await blockFonts(there);
+  await there.goto("/notes");
+  await there.getByLabel("이메일").fill(address);
+  await there.getByLabel("비밀번호").fill(PASSWORD);
+  await there.getByRole("button", { name: "로그인", exact: true }).click();
+  await expect(there.getByRole("heading", { name: "첨삭노트" })).toBeVisible();
+  await there.getByRole("button", { name: /전체 카드/ }).click();
+  await expect(there.getByText("I went to the park yesterday.").first()).toBeVisible();
+  await other.close();
+});

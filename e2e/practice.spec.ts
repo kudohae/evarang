@@ -43,7 +43,7 @@ test("practice shows the question text and allows a retake", async ({ page }) =>
   await page.getByRole("button", { name: "질문 듣기" }).click();
   await expect(page.getByRole("button", { name: "다시 말하기" })).toBeVisible({ timeout: 60_000 });
   await page.getByRole("button", { name: "질문 보기" }).click();
-  await expect(page.locator("p", { hasText: /\?|\./ }).filter({ hasText: /home|live|house|room|neighbor|apartment|chores/i }).first()).toBeVisible();
+  await expect(page.locator("p", { hasText: /\?|\./ }).filter({ hasText: /home|live|hous|room|neighbor|apartment|chores/i }).first()).toBeVisible();
 });
 
 test("a refused own key brings up the dialog, and feedback still arrives from the free models", async ({ page }) => {

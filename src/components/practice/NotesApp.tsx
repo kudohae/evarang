@@ -374,7 +374,7 @@ function CardRow({ card, box, due, onPractice, onHide, onShow }: { card: NoteCar
 export function NotesApp() {
   const config = useConfig();
   const toast = useToast();
-  const { attempts } = useAttempts();
+  const { attempts, pulling } = useAttempts();
   const keep = syncEnabled(config.user);
   const audio = config.storage?.blob !== false;
   const [state, setState] = useState<ReviewState | null>(null);
@@ -389,7 +389,8 @@ export function NotesApp() {
   const accountOk = useRef(true);
   const latest = useRef<ReviewState>({});
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  const migrated = useRef(false);
+  // The cards the old ids were last moved for; records pulled from the account bring new cards.
+  const migrated = useRef<NoteCard[] | null>(null);
 
   useEffect(() => {
     try {
@@ -426,10 +427,10 @@ export function NotesApp() {
     [keep, audio],
   );
 
-  // Review states of the first version used index-based card ids; move them once.
+  // Review states of the first version used index-based card ids; move them for each new set of cards.
   useEffect(() => {
-    if (migrated.current || state === null || attempts === null) return;
-    migrated.current = true;
+    if (migrated.current === cards || state === null || attempts === null) return;
+    migrated.current = cards;
     const moved = migrateState(state, cards);
     if (JSON.stringify(moved) !== JSON.stringify(state)) update(moved);
   }, [state, attempts, cards, update]);
@@ -474,7 +475,14 @@ export function NotesApp() {
   return (
     <AppShell>
       <Page>
-        <PageHead title="첨삭노트" lead="모의고사와 연습에서 고친 표현이 모두 여기 모입니다. 틀린 유형을 골라 소리 내어 다시 말하면, 맞힌 카드는 점점 뜸하게, 틀린 카드는 다시 나옵니다." />
+        <PageHead title="첨삭노트" lead="모의고사와 연습에서 고친 표현이 모두 여기 모입니다. 다른 기기에서 한 기록도 계정에 저장했다면 함께 모입니다. 틀린 유형을 골라 소리 내어 다시 말하면, 맞힌 카드는 점점 뜸하게, 틀린 카드는 다시 나옵니다.">
+          {pulling && (
+            <p role="status" className="mt-3 inline-flex items-center gap-2 text-[13px] text-ink-3">
+              <Spinner className="size-3.5" />
+              계정에 있는 기록을 불러오는 중
+            </p>
+          )}
+        </PageHead>
 
         <div className="rise mt-8 grid grid-cols-3 gap-3">
           {[

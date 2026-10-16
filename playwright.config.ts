@@ -4,6 +4,8 @@ const PORT = 3100;
 
 export default defineConfig({
   testDir: "e2e",
+  // The signed-in site has its own config with a database (playwright.accounts.config.ts).
+  testIgnore: /accounts\.spec\.ts/,
   timeout: 300_000,
   expect: { timeout: 20_000 },
   fullyParallel: false,

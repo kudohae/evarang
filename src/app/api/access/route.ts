@@ -1,7 +1,10 @@
 import { cookies } from "next/headers";
 import { ACCESS_COOKIE, tokenFor } from "@/lib/server/access";
+import { authConfigured } from "@/lib/server/auth";
 
+/** The entry code, for a site without accounts. With accounts, members sign in instead (see guard). */
 export async function POST(request: Request) {
+  if (authConfigured()) return Response.json({ error: "로그인해서 이용하세요." }, { status: 404 });
   const body = (await request.json().catch(() => ({}))) as { code?: unknown };
   const code = typeof body.code === "string" ? body.code.trim() : "";
   const token = tokenFor(code);

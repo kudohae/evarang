@@ -10,7 +10,7 @@
 
    | 이름 | 필수 | 설명 |
    |---|---|---|
-   | `ACCESS_CODE` | 예 | 사이트 접근 코드. 비워두면 주소를 아는 누구나 내 API 키로 비용을 쓸 수 있습니다. |
+   | `ACCESS_CODE` | 예 | 가입할 때 넣는 초대 코드. 회원 기능(데이터베이스)이 켜져 있으면 사이트는 로그인한 회원만 쓸 수 있고, 이 코드는 가입 화면에서만 묻습니다. 비워두면 누구나 가입할 수 있습니다. 데이터베이스가 없으면 예전처럼 첫 화면에서 이 코드를 묻습니다. |
    | `ASSEMBLYAI_API_KEY` | 예 | 음성인식 |
    | `GEMINI_API_KEY` | 예 | 평가(무료 등급), 그리고 AssemblyAI가 안 될 때의 보조 음성인식 |
    | `GROQ_API_KEY` | 권장 | Gemini 무료 한도를 다 쓴 날의 평가 (GPT-OSS 120B, 무료 등급) |
@@ -44,7 +44,7 @@ src/
   app/                    페이지와 API 라우트
     api/transcribe        녹음 → AssemblyAI (Universal-3.5 Pro, disfluencies: true), 실패하면 Gemini
     api/feedback/answers  답변 피드백(렌즈별, 최대 8개씩)     api/feedback/overall  모의고사 종합 판정
-    api/access            접근 코드 확인 → httpOnly 쿠키
+    api/access            접근 코드 확인 → httpOnly 쿠키 (데이터베이스가 없을 때만. 있으면 로그인)
     api/auth, api/account 가입·로그인·로그아웃, 회원정보 수정·탈퇴 (lib/server/auth.ts)
     api/me/docs           계정에 둔 기록(종류별)과 녹음 (lib/server/docs.ts)
     api/me/usage          오늘 남은 무료 횟수 (lib/server/meter.ts)
@@ -93,6 +93,7 @@ src/
 npm run typecheck
 npm test            # Vitest: 이름표, 스키마, 렌즈, 사다리, 사용량, 저장소, 동기화 (fake-indexeddb)
 npm run test:e2e    # Playwright: 모의고사 흐름, 다시 듣기 5초, 보조 음성인식 안내, 공통 머리말, 네 연습 기능
+npm run test:e2e:accounts  # 로그인 화면·가입 초대 코드·로그아웃. 로컬 Postgres(postgres:x@127.0.0.1:5432)와 `npm i --no-save pg`가 필요합니다
 ```
 
 - e2e는 빌드한 뒤 `next start`로 3100번 포트에 띄우고, 받아쓰기·평가 API를 가짜 응답으로 바꿉니다. 키나 DB가 필요 없습니다. `next dev`의 자동 새로고침이 파일을 바꾼 직후 가끔 "HMR hash mismatch"로 계속 새로고침해서 개발 서버는 쓰지 않습니다.

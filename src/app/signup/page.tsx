@@ -7,7 +7,7 @@ export const metadata: Metadata = { title: "가입 — 에바랑" };
 
 export default function Page() {
   return (
-    <AccessGate>
+    <AccessGate open>
       <Suspense>
         <SignupForm />
       </Suspense>

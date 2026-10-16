@@ -1,12 +1,17 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
+import { createContext, Suspense, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
+import { LoginForm } from "@/components/account/LoginForm";
 import { KeyOutDialog } from "@/components/KeyOutDialog";
 import { Button, Spinner, Wordmark } from "@/components/ui";
 
 export type Config = {
+  /** The site is not open to everyone: members sign in (with accounts), or the access code (without). */
   accessRequired: boolean;
+  /** This visitor may use the site: signed in, or the access code entered. */
   hasAccess: boolean;
+  /** Sign-up asks for the invite code. */
+  inviteRequired?: boolean;
   stt: boolean;
   /** Server can store research records (database and blob store configured). */
   research: boolean;
@@ -39,8 +44,17 @@ export function useConfig(): Config {
   return c;
 }
 
-/** Fetches server config once; asks for the access code when the server requires one. */
-export function AccessGate({ children }: { children: ReactNode }) {
+/** The visitor still has to sign in (or, on a site without accounts, enter the access code). */
+export function signedOut(c: Config | null): boolean {
+  return Boolean(c?.accessRequired && !c.hasAccess);
+}
+
+/**
+ * Fetches server config once. With accounts, a visitor who has not signed in gets the login screen in place
+ * of the page, and the page itself once signed in; `open` pages (login, sign-up) show anyway. Without
+ * accounts, the access code when the server asks for one.
+ */
+export function AccessGate({ children, open = false }: { children: ReactNode; open?: boolean }) {
   const [config, setConfig] = useState<Config | null>(null);
   const [code, setCode] = useState("");
   const [error, setError] = useState("");
@@ -63,7 +77,7 @@ export function AccessGate({ children }: { children: ReactNode }) {
     );
   }
 
-  if (config.accessRequired && !config.hasAccess) {
+  if (signedOut(config) && !config.auth) {
     const submit = async (e: React.FormEvent) => {
       e.preventDefault();
       setBusy(true);
@@ -103,7 +117,13 @@ export function AccessGate({ children }: { children: ReactNode }) {
   return (
     <ReloadContext.Provider value={load}>
       <ConfigContext.Provider value={config}>
-        {children}
+        {signedOut(config) && !open ? (
+          <Suspense>
+            <LoginForm gate />
+          </Suspense>
+        ) : (
+          children
+        )}
         <KeyOutDialog config={config} />
       </ConfigContext.Provider>
     </ReloadContext.Provider>

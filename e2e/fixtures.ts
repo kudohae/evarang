@@ -1,4 +1,4 @@
-import type { Page, Route } from "@playwright/test";
+import { expect, type Page, type Route } from "@playwright/test";
 
 /*
   Network stand-ins for the e2e runs: transcription and AI feedback answer instantly with fixed,
@@ -112,7 +112,9 @@ export async function blockFonts(page: Page) {
 export async function connectMic(page: Page) {
   const button = page.getByRole("button", { name: "마이크 연결" });
   await page.waitForTimeout(300);
-  if (await button.isVisible()) await button.click();
+  // It may connect by itself between the look and the click; then the button is simply gone.
+  if (await button.isVisible()) await button.click({ timeout: 3000 }).catch(() => {});
+  await expect(button).toHaveCount(0);
 }
 
 /** Keeps the last microphone stream the page got on `window.__mic`, so a test can look at or end it. */

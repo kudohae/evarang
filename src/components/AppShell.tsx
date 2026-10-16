@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
-import { useOptionalConfig } from "@/components/AccessGate";
+import { signedOut, useOptionalConfig } from "@/components/AccessGate";
 import { Wordmark } from "@/components/ui";
 import { openFeatures } from "@/lib/features";
 
@@ -16,6 +16,8 @@ const WIDTH = { narrow: "max-w-[720px]", default: "max-w-[1040px]", wide: "max-w
 export function AppShell({ children, width = "default" }: { children: ReactNode; width?: keyof typeof WIDTH }) {
   const path = usePathname();
   const config = useOptionalConfig();
+  // Before signing in, only the wordmark: the features would all lead back to the login screen.
+  const out = signedOut(config);
   return (
     <div className="flex min-h-dvh flex-col">
       <header className="no-print">
@@ -23,6 +25,7 @@ export function AppShell({ children, width = "default" }: { children: ReactNode;
           <div className="flex h-14 items-center">
             <Wordmark />
           </div>
+          {!out && (
           <nav aria-label="기능" className="order-last -mx-5 w-[calc(100%+2.5rem)] overflow-x-auto px-5 sm:order-none sm:mx-0 sm:w-auto sm:flex-1 sm:px-0">
             <ul className="flex h-11 items-center gap-6 whitespace-nowrap sm:h-14">
               {openFeatures().map((f) => {
@@ -37,8 +40,9 @@ export function AppShell({ children, width = "default" }: { children: ReactNode;
               })}
             </ul>
           </nav>
+          )}
           <div className="ml-auto flex h-14 items-center sm:ml-0">
-            {config?.auth &&
+            {config?.auth && !out &&
               (config.user ? (
                 <Link href="/account" className="text-[14px] font-medium text-ink-2 hover:text-ink">
                   {config.user.nickname}

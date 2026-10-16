@@ -6,24 +6,28 @@ import { storageConfigured } from "@/lib/server/store";
 import { authConfigured, currentUser, type User } from "@/lib/server/auth";
 
 export async function GET() {
-  const ok = await hasAccess();
+  const auth = authConfigured();
   let user: User | null = null;
   let aiKey: KeySummary | null = null;
   try {
-    user = ok ? await currentUser() : null;
+    user = await currentUser();
   } catch {
     // The database being down should not take the whole site with it; the visitor just looks signed out.
   }
+  // With accounts, the site is for signed-in members (see guard); without, behind the access code if set.
+  const ok = auth ? Boolean(user) : await hasAccess();
   try {
     aiKey = user ? await keySummary(user.id) : null;
   } catch {
     // Without the key record the member grades on the site's free models, as if they had no key.
   }
   return Response.json({
-    accessRequired: accessRequired(),
+    accessRequired: auth || accessRequired(),
     hasAccess: ok,
+    /** Sign-up asks for the invite code (ACCESS_CODE). */
+    inviteRequired: auth && accessRequired(),
     research: storageConfigured(),
-    auth: authConfigured(),
+    auth,
     user: user && {
       email: user.email,
       nickname: user.nickname,

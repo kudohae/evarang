@@ -1,5 +1,6 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { cookies } from "next/headers";
+import { authConfigured, currentUser } from "@/lib/server/auth";
 
 export const ACCESS_COOKIE = "evarang_access";
 
@@ -30,10 +31,27 @@ export async function hasAccess(): Promise<boolean> {
   return a.length === b.length && timingSafeEqual(a, b);
 }
 
-/** Returns a 401 response when the caller has not entered the access code. */
+/**
+ * Who may use the site. With accounts set up, only signed-in members; ACCESS_CODE is then the invite code
+ * for sign-up (see inviteOk). Without accounts (local development, tests), the access code if one is set.
+ */
+export async function signedIn(): Promise<boolean> {
+  if (authConfigured()) return Boolean(await currentUser().catch(() => null));
+  return hasAccess();
+}
+
+/** Returns a 401 response when the caller may not use the site (see signedIn). */
 export async function guard(): Promise<Response | null> {
-  if (await hasAccess()) return null;
-  return Response.json({ error: "접근 코드가 필요합니다." }, { status: 401 });
+  if (await signedIn()) return null;
+  return authConfigured()
+    ? Response.json({ error: "로그인이 필요합니다.", kind: "login" }, { status: 401 })
+    : Response.json({ error: "접근 코드가 필요합니다." }, { status: 401 });
+}
+
+/** Sign-up needs the invite code when one is set. */
+export function inviteOk(code: unknown): boolean {
+  if (!accessRequired()) return true;
+  return typeof code === "string" && tokenFor(code.trim()) !== null;
 }
 
 // ── Admin ──────────────────────────────────────────────────

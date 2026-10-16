@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useConfig } from "@/components/AccessGate";
 import { Report } from "@/components/report/Report";
 import { WaitingRoom } from "@/components/report/WaitingRoom";
+import { SupportNote } from "@/components/Support";
 import { AppShell } from "@/components/AppShell";
 import { Button, Icon, Spinner } from "@/components/ui";
 import { evaluate, type Progress } from "@/lib/client/evaluate";
@@ -26,6 +27,8 @@ export function ReportApp({ id }: { id: string }) {
   const [shown, setShown] = useState<string | null>(null);
   const [retrying, setRetrying] = useState(false);
   const [notice, setNotice] = useState<FallbackReason | null>(null);
+  // The operator's note, between the waiting room and the report: once per test, right after it.
+  const [note, setNote] = useState(false);
 
   // The latest saved result. Writes that finish later (evaluation, grade answer) build on this, never on a stale copy.
   const latest = useRef<ExamResult | null>(null);
@@ -179,7 +182,12 @@ export function ReportApp({ id }: { id: string }) {
           done={waiting.done}
           modelLabel={modelLabel(waiting.progress.modelId)}
           onActualGrade={answerActualGrade}
-          onOpenReport={() => {
+          onOpenReport={() => setNote(true)}
+        />
+        <SupportNote
+          open={note}
+          onContinue={() => {
+            setNote(false);
             setWaiting(null);
             window.scrollTo(0, 0);
           }}

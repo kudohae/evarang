@@ -22,6 +22,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           rel="stylesheet"
           href="https://cdn.jsdelivr.net/npm/wanted-sans@1.0.3/fonts/webfonts/variable/split/WantedSansVariable.css"
         />
+        {/* The coffee button's lettering only: `text=` asks for just these letters. */}
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cookie&display=swap&text=Buymeacofe%20" />
       </head>
       <body>
         <Providers>{children}</Providers>

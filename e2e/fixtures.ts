@@ -105,7 +105,7 @@ export async function mockFeedback(page: Page) {
 
 /** Webfonts come from a CDN; the tests do not need them. */
 export async function blockFonts(page: Page) {
-  await page.route(/cdn\.jsdelivr\.net/, (route) => route.abort());
+  await page.route(/cdn\.jsdelivr\.net|fonts\.(googleapis|gstatic)\.com/, (route) => route.abort());
 }
 
 /** Connects the microphone if the page still asks; with permission already granted it connects by itself. */

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 import { signedOut, useOptionalConfig } from "@/components/AccessGate";
+import { CoffeeLink } from "@/components/Support";
 import { Wordmark } from "@/components/ui";
 import { openFeatures } from "@/lib/features";
 
@@ -16,7 +17,7 @@ const WIDTH = { narrow: "max-w-[720px]", default: "max-w-[1040px]", wide: "max-w
 export function AppShell({ children, width = "default" }: { children: ReactNode; width?: keyof typeof WIDTH }) {
   const path = usePathname();
   const config = useOptionalConfig();
-  // Before signing in, only the wordmark: the features would all lead back to the login screen.
+  // Before signing in, only the wordmark and the coffee button: the features would all lead back to the login screen.
   const out = signedOut(config);
   return (
     <div className="flex min-h-dvh flex-col">
@@ -41,7 +42,8 @@ export function AppShell({ children, width = "default" }: { children: ReactNode;
             </ul>
           </nav>
           )}
-          <div className="ml-auto flex h-14 items-center sm:ml-0">
+          <div className="ml-auto flex h-14 items-center gap-4 sm:ml-0">
+            <CoffeeLink />
             {config?.auth && !out &&
               (config.user ? (
                 <Link href="/account" className="text-[14px] font-medium text-ink-2 hover:text-ink">

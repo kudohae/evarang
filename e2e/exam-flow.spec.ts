@@ -65,6 +65,11 @@ test("exam completes and shows the report", async ({ page }) => {
   await page.getByRole("button", { name: "IM2", exact: true }).click();
   await page.getByText("평가가 끝났습니다").waitFor();
   await page.getByRole("button", { name: "보고서 보기" }).first().click();
+  // The operator's note comes first, once; the result opens from it.
+  const note = page.getByRole("dialog");
+  await expect(note.getByText("에바랑 운영자입니다")).toBeVisible();
+  await expect(note.getByRole("link", { name: /커피 한 잔 후원하기/ })).toHaveAttribute("href", "https://www.buymeacoffee.com/hinoamchomsky02");
+  await note.getByRole("button", { name: "결과 보기" }).click();
   await expect(page.locator("#grade")).toBeVisible();
   const numbers = page.locator("#answers").getByRole("button", { name: /^\d+$/ });
   await expect(numbers).toHaveCount(15);

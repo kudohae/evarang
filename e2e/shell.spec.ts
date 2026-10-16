@@ -9,6 +9,10 @@ async function expectShell(page: Page) {
   await expect(header.getByRole("link", { name: "에바랑" })).toBeVisible();
   const nav = header.getByRole("navigation", { name: "기능" });
   for (const label of ORDER) await expect(nav.getByRole("link", { name: label, exact: true })).toHaveCount(1);
+  const coffee = header.getByRole("link", { name: /Buy me a coffee/ });
+  await expect(coffee).toBeVisible();
+  await expect(coffee).toHaveAttribute("href", "https://www.buymeacoffee.com/hinoamchomsky02");
+  await expect(coffee).toHaveAttribute("target", "_blank");
 }
 
 test.beforeEach(async ({ page }) => {
